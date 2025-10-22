@@ -69,6 +69,7 @@
         <apicurio-registry.version>2.6.13.Final</apicurio-registry.version>
         <apicurio-common.version>0.1.18.Final</apicurio-common.version>
         <jose4j.version>0.9.6</jose4j.version>
+        <checkstyle-tools.version>12.1.0</checkstyle-tools.version>
 
         <!-- Test dependencies -->
         <strimzi.version>0.48.0</strimzi.version>  <!-- when bumping strimzi, be sure to comment out the kafka.version override in the systemtest module's pom -->
@@ -182,6 +183,12 @@
                 <artifactId>spotbugs-annotations</artifactId>
                 <version>${spotbugs-annotations.version}</version>
                 <scope>provided</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>com.puppycrawl.tools</groupId>
+                <artifactId>checkstyle</artifactId>
+                <version>${checkstyle-tools.version}</version>
             </dependency>
 
             <dependency>
@@ -503,6 +510,7 @@
         <module>kroxylicious-operator</module>
         <module>kroxylicious-operator-dist</module>
         <module>kroxylicious-docs</module>
+        <module>kroxylicious-checkstyle</module>
     </modules>
 
 
@@ -627,6 +635,13 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-checkstyle-plugin</artifactId>
                     <version>3.6.0</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>io.kroxylicious</groupId>
+                            <artifactId>kroxylicious-checkstyle</artifactId>
+                            <version>${version}</version>
+                        </dependency>
+                    </dependencies>
                     <configuration>
                         <violationSeverity>warning</violationSeverity>
                         <failOnViolation>true</failOnViolation>
@@ -1115,6 +1130,13 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-checkstyle-plugin</artifactId>
+                        <dependencies>
+                            <dependency>
+                                <groupId>io.kroxylicious</groupId>
+                                <artifactId>kroxylicious-checkstyle</artifactId>
+                                <version>${version}</version>
+                            </dependency>
+                        </dependencies>
                         <configuration>
                             <violationSeverity>warning</violationSeverity>
                             <failOnViolation>true</failOnViolation>
