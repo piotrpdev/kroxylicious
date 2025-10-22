@@ -136,6 +136,8 @@
             <property name="allowLineBreaks" value="false" />
         </module-->
 
+        <module name="io.kroxylicious.checks.AssumptionsCheck"/>
+
     </module>
 
     <!--
