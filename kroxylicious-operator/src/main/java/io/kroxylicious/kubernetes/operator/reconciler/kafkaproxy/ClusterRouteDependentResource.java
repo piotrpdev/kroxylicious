@@ -12,9 +12,10 @@ import java.util.Set;
 import io.fabric8.openshift.api.model.Route;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.processing.dependent.BulkDependentResource;
+import io.javaoperatorsdk.operator.processing.dependent.kubernetes.BooleanWithUndefined;
 import io.javaoperatorsdk.operator.processing.dependent.kubernetes.CRUDKubernetesDependentResource;
 import io.javaoperatorsdk.operator.processing.dependent.kubernetes.KubernetesDependent;
-import io.javaoperatorsdk.operator.processing.event.NoEventSourceForClassException;
+import io.javaoperatorsdk.operator.processing.event.EventSourceRetriever;
 
 import io.kroxylicious.kubernetes.api.v1alpha1.KafkaProxy;
 import io.kroxylicious.kubernetes.api.v1alpha1.VirtualKafkaCluster;
@@ -27,7 +28,7 @@ import static io.kroxylicious.kubernetes.operator.ResourcesUtil.toByNameMap;
 /**
  * Generates the OpenShift {@code Route} for a single virtual cluster.
  */
-@KubernetesDependent
+@KubernetesDependent(useSSA = BooleanWithUndefined.TRUE)
 public class ClusterRouteDependentResource
         extends CRUDKubernetesDependentResource<Route, KafkaProxy>
         implements BulkDependentResource<Route, KafkaProxy, String> {
@@ -66,14 +67,11 @@ public class ClusterRouteDependentResource
     public Map<String, Route> getSecondaryResources(
                                                     KafkaProxy primary,
                                                     Context<KafkaProxy> context) {
-        try {
-            Set<Route> secondaryResources = context.eventSourceRetriever().getEventSourceFor(Route.class)
-                    .getSecondaryResources(primary);
-            return secondaryResources.stream().collect(toByNameMap());
-        }
-        catch (NoEventSourceForClassException e) {
-            return Map.of();
-        }
+        EventSourceRetriever<KafkaProxy> kafkaProxyEventSourceRetriever = context.eventSourceRetriever();
+
+        Set<Route> secondaryResources = kafkaProxyEventSourceRetriever.getEventSourceFor(Route.class)
+                .getSecondaryResources(primary);
+        return secondaryResources.stream().collect(toByNameMap());
     }
 
     @Override
