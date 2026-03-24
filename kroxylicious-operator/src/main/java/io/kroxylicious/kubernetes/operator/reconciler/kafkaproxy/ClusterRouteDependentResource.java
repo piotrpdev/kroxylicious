@@ -15,7 +15,7 @@ import io.javaoperatorsdk.operator.processing.dependent.BulkDependentResource;
 import io.javaoperatorsdk.operator.processing.dependent.kubernetes.BooleanWithUndefined;
 import io.javaoperatorsdk.operator.processing.dependent.kubernetes.CRUDKubernetesDependentResource;
 import io.javaoperatorsdk.operator.processing.dependent.kubernetes.KubernetesDependent;
-import io.javaoperatorsdk.operator.processing.event.EventSourceRetriever;
+import io.javaoperatorsdk.operator.processing.event.NoEventSourceForClassException;
 
 import io.kroxylicious.kubernetes.api.v1alpha1.KafkaProxy;
 import io.kroxylicious.kubernetes.api.v1alpha1.VirtualKafkaCluster;
@@ -67,11 +67,15 @@ public class ClusterRouteDependentResource
     public Map<String, Route> getSecondaryResources(
                                                     KafkaProxy primary,
                                                     Context<KafkaProxy> context) {
-        EventSourceRetriever<KafkaProxy> kafkaProxyEventSourceRetriever = context.eventSourceRetriever();
-
-        Set<Route> secondaryResources = kafkaProxyEventSourceRetriever.getEventSourceFor(Route.class)
-                .getSecondaryResources(primary);
-        return secondaryResources.stream().collect(toByNameMap());
+        // This try/catch is a temporary workaround until the following bug is fixed: https://github.com/operator-framework/java-operator-sdk/issues/3249
+        try {
+            Set<Route> secondaryResources = context.eventSourceRetriever().getEventSourceFor(Route.class)
+                    .getSecondaryResources(primary);
+            return secondaryResources.stream().collect(toByNameMap());
+        }
+        catch (NoEventSourceForClassException e) {
+            return Map.of();
+        }
     }
 
     @Override
