@@ -57,6 +57,7 @@ import io.fabric8.kubernetes.api.model.apps.DeploymentBuilder;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
 import io.fabric8.kubernetes.client.readiness.Readiness;
 import io.fabric8.openshift.api.model.Route;
+import io.fabric8.openshift.api.model.RouteBuilder;
 import io.fabric8.openshift.api.model.operator.v1.IngressController;
 import io.javaoperatorsdk.operator.junit.LocallyRunOperatorExtension;
 
@@ -88,6 +89,7 @@ import io.kroxylicious.kubernetes.api.v1alpha1.kafkaservicespec.NodeIdRanges;
 import io.kroxylicious.kubernetes.api.v1alpha1.kafkaservicespec.NodeIdRangesBuilder;
 import io.kroxylicious.kubernetes.api.v1alpha1.virtualkafkaclusterspec.Ingresses;
 import io.kroxylicious.kubernetes.api.v1alpha1.virtualkafkaclusterspec.IngressesBuilder;
+import io.kroxylicious.kubernetes.operator.Annotations;
 import io.kroxylicious.kubernetes.operator.LocallyRunningOperatorRbacHandler;
 import io.kroxylicious.kubernetes.operator.OperatorTestUtils;
 import io.kroxylicious.kubernetes.operator.ResourcesUtil;
@@ -820,6 +822,57 @@ public class KafkaProxyReconcilerIT {
                 .hasAdvertisedBrokerAddressPattern(new HostPort(routeBrokerAddressPattern, clientFacingPort).toString()));
     }
 
+    @Test
+    void deploymentChecksumUpdatesWhenOpenshiftRouteHostAssigned() {
+        assumeThat(testActor.supports(Route.class))
+                .withFailMessage("kubernetes server is missing support for resource kind Route").isTrue();
+
+        // Given
+        KafkaProxy proxy = testActor.create(kafkaProxy(PROXY_A));
+        KafkaService kafkaService = updateStatusObservedGeneration(
+                testActor.create(kafkaService(CLUSTER_BAR_REF, CLUSTER_BAR_BOOTSTRAP)), CLUSTER_BAR_BOOTSTRAP);
+
+        String ingressName = "openshiftroute";
+        KafkaProxyIngress openshiftRouteIngress = updateStatusObservedGeneration(
+                testActor.create(openshiftRouteIngress(ingressName, proxy)));
+
+        Secret tlsCert = testActor.create(tlsKeyAndCertSecret("downstream-tls-certificate"));
+
+        Ingresses clusterIngress = new IngressesBuilder()
+                .withIngressRef(toIngressRef(openshiftRouteIngress))
+                .withNewTls().withCertificateRef(toCertificateRef(tlsCert)).endTls()
+                .build();
+        VirtualKafkaCluster cluster = virtualKafkaCluster(CLUSTER_BAR, proxy, kafkaService,
+                List.of(clusterIngress), Optional.empty());
+        updateStatusObservedGeneration(testActor.create(cluster));
+
+        String bootstrapRouteName = name(cluster) + "-bootstrap";
+        AWAIT.alias("bootstrap route created").untilAsserted(() -> assertThat(testActor.get(Route.class, bootstrapRouteName)).isNotNull());
+
+        String initialChecksum = deploymentPodTemplateChecksum(proxy);
+
+        // When - OpenShift assigns a host to the bootstrap route
+        Route bootstrapRoute = testActor.get(Route.class, bootstrapRouteName);
+        Route routeWithHost = new RouteBuilder(bootstrapRoute)
+                .withNewStatus()
+                .addNewIngress().withHost(bootstrapRouteName + ".apps-crc.testing").endIngress()
+                .endStatus()
+                .build();
+        testActor.patchStatus(routeWithHost);
+
+        // Then - deployment pod template checksum should change so the proxy is restarted
+        AWAIT.alias("deployment checksum updated after route host assignment")
+                .untilAsserted(() -> assertThat(deploymentPodTemplateChecksum(proxy)).isNotEqualTo(initialChecksum));
+    }
+
+    private String deploymentPodTemplateChecksum(KafkaProxy proxy) {
+        var deployment = testActor.get(Deployment.class, ProxyDeploymentDependentResource.deploymentName(proxy));
+        assertThat(deployment).isNotNull();
+        return Optional.ofNullable(deployment.getSpec().getTemplate().getMetadata().getAnnotations())
+                .map(annotations -> annotations.get(Annotations.REFERENT_CHECKSUM_ANNOTATION_KEY))
+                .orElse(null);
+    }
+
     private void assertRouteManifested(String routeName, boolean isBootstrap, KafkaProxy proxy, String serviceName, int targetPort) {
         var openshiftRoute = testActor.get(Route.class, routeName);
         assertThat(openshiftRoute).isNotNull()
@@ -1299,10 +1352,12 @@ public class KafkaProxyReconcilerIT {
 
     // the KafkaProxyReconciler only operates on KafkaServices that have been reconciled, ie metadata.status == status.observedGeneration
     private KafkaService updateStatusObservedGeneration(KafkaService service, String bootstrapServers) {
-        service.setStatus(new KafkaServiceStatusBuilder().withObservedGeneration(generation(service))
+        // Re-fetch to get the latest resourceVersion - the operator may have reconciled since we created it
+        KafkaService fresh = testActor.get(KafkaService.class, name(service));
+        fresh.setStatus(new KafkaServiceStatusBuilder().withObservedGeneration(generation(fresh))
                 .withBootstrapServers(bootstrapServers)
                 .build());
-        return testActor.patchStatus(service);
+        return testActor.patchStatus(fresh);
     }
 
     // the KafkaProxyReconciler only operates on KafkaServices that have been reconciled, ie metadata.status == status.observedGeneration
