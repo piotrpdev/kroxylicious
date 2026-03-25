@@ -77,14 +77,10 @@ public record RouteClusterIngressNetworkingModel(KafkaProxy proxy,
 
     @Override
     public Stream<RouteBuilder> routes() {
-        ObjectMetaBuilder metadataBuilder = baseMetadataBuilder();
-        Annotations.annotateWithBootstrapServers(metadataBuilder,
-                Set.of(new Annotations.ClusterIngressBootstrapServers(ResourcesUtil.name(cluster), ResourcesUtil.name(ingress), bootstrapServers())));
-        var bootstrapRoute = createRoute(metadataBuilder, suffixedRouteName("bootstrap"), RouteHostDetails.RouteFor.BOOTSTRAP);
-
+        var bootstrapRoute = createRoute(suffixedRouteName("bootstrap"), RouteHostDetails.RouteFor.BOOTSTRAP);
         var nodeRoutes = nodeIdRanges.stream()
                 .flatMapToInt(nodeIdRange -> IntStream.rangeClosed(toIntExact(nodeIdRange.getStart()), toIntExact(nodeIdRange.getEnd())))
-                .mapToObj(upstreamNodeId -> createRoute(metadataBuilder, suffixedRouteName(String.valueOf(upstreamNodeId)), RouteHostDetails.RouteFor.NODE));
+                .mapToObj(upstreamNodeId -> createRoute(suffixedRouteName(String.valueOf(upstreamNodeId)), RouteHostDetails.RouteFor.NODE));
 
         return Stream.concat(Stream.of(bootstrapRoute), nodeRoutes);
     }
@@ -99,13 +95,15 @@ public record RouteClusterIngressNetworkingModel(KafkaProxy proxy,
                 .endSpec();
     }
 
-    private RouteBuilder createRoute(ObjectMetaBuilder metadataBuilder, String subdomain, RouteHostDetails.RouteFor routeFor) {
+    private RouteBuilder createRoute(String subdomain, RouteHostDetails.RouteFor routeFor) {
+        ObjectMetaBuilder metadataBuilder = baseMetadataBuilder();
+        Annotations.annotateWithManagedRoute(metadataBuilder,
+                new Annotations.ManagedRoute(ResourcesUtil.name(cluster), ResourcesUtil.name(ingress), routeFor));
         // @formatter:off
         return new RouteBuilder()
                 .withMetadata(metadataBuilder.build())
                 .editMetadata()
                     .withName(subdomain)
-                    .addToLabels(RouteHostDetails.RouteFor.LABEL_KEY, String.valueOf(routeFor))
                 .endMetadata()
                 .withNewSpec()
                     .withSubdomain(subdomain)

@@ -88,6 +88,7 @@ import io.kroxylicious.kubernetes.api.v1alpha1.kafkaservicespec.NodeIdRanges;
 import io.kroxylicious.kubernetes.api.v1alpha1.kafkaservicespec.NodeIdRangesBuilder;
 import io.kroxylicious.kubernetes.api.v1alpha1.virtualkafkaclusterspec.Ingresses;
 import io.kroxylicious.kubernetes.api.v1alpha1.virtualkafkaclusterspec.IngressesBuilder;
+import io.kroxylicious.kubernetes.operator.Annotations;
 import io.kroxylicious.kubernetes.operator.LocallyRunningOperatorRbacHandler;
 import io.kroxylicious.kubernetes.operator.OperatorTestUtils;
 import io.kroxylicious.kubernetes.operator.ResourcesUtil;
@@ -115,6 +116,7 @@ import static io.kroxylicious.kubernetes.api.common.Protocol.TLS;
 import static io.kroxylicious.kubernetes.operator.ResourcesUtil.findOnlyResourceNamed;
 import static io.kroxylicious.kubernetes.operator.ResourcesUtil.generation;
 import static io.kroxylicious.kubernetes.operator.ResourcesUtil.name;
+import static io.kroxylicious.kubernetes.operator.model.RouteHostDetails.RouteFor.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assumptions.assumeThat;
 import static org.assertj.core.api.InstanceOfAssertFactories.list;
@@ -804,10 +806,10 @@ public class KafkaProxyReconcilerIT {
         assertSharedSniPortExposedOnProxyDeployment(proxy, proxyListenPort);
 
         AWAIT.alias("openshift routes created").untilAsserted(() -> {
-            assertRouteManifested(name(cluster) + "-bootstrap", true, proxy, serviceName, proxyListenPort);
-            assertRouteManifested(name(cluster) + "-0", false, proxy, serviceName, proxyListenPort);
-            assertRouteManifested(name(cluster) + "-1", false, proxy, serviceName, proxyListenPort);
-            assertRouteManifested(name(cluster) + "-2", false, proxy, serviceName, proxyListenPort);
+            assertRouteManifested(name(cluster) + "-bootstrap", BOOTSTRAP, proxy, serviceName, proxyListenPort);
+            assertRouteManifested(name(cluster) + "-0", NODE, proxy, serviceName, proxyListenPort);
+            assertRouteManifested(name(cluster) + "-1", NODE, proxy, serviceName, proxyListenPort);
+            assertRouteManifested(name(cluster) + "-2", NODE, proxy, serviceName, proxyListenPort);
         });
 
         int clientFacingPort = RouteClusterIngressNetworkingModel.CLIENT_FACING_ROUTE_PORT;
@@ -820,7 +822,7 @@ public class KafkaProxyReconcilerIT {
                 .hasAdvertisedBrokerAddressPattern(new HostPort(routeBrokerAddressPattern, clientFacingPort).toString()));
     }
 
-    private void assertRouteManifested(String routeName, boolean isBootstrap, KafkaProxy proxy, String serviceName, int targetPort) {
+    private void assertRouteManifested(String routeName, RouteHostDetails.RouteFor routeFor, KafkaProxy proxy, String serviceName, int targetPort) {
         var openshiftRoute = testActor.get(Route.class, routeName);
         assertThat(openshiftRoute).isNotNull()
                 .describedAs(
@@ -828,14 +830,14 @@ public class KafkaProxyReconcilerIT {
                 .extracting(route -> route.getSpec().getTo().getName())
                 .describedAs("Route's spec.to should select proxy shared SNI service")
                 .isEqualTo(serviceName);
-        var routeForLabelValue = openshiftRoute.getMetadata().getLabels().get(RouteHostDetails.RouteFor.LABEL_KEY);
-        assertThat(routeForLabelValue).isNotNull();
-        if (isBootstrap) {
-            assertThat(routeForLabelValue).isEqualTo(RouteHostDetails.RouteFor.BOOTSTRAP.toString());
-        }
-        else {
-            assertThat(routeForLabelValue).isEqualTo(RouteHostDetails.RouteFor.NODE.toString());
-        }
+        Map<String, String> annotations = openshiftRoute.getMetadata().getAnnotations();
+        assertThat(annotations).containsKey(Annotations.MANAGED_ROUTE_KEY);
+        Optional<Annotations.ManagedRoute> managedRoute = Annotations.readManagedRouteFrom(openshiftRoute);
+        assertThat(managedRoute).hasValueSatisfying(routeDetails -> {
+            assertThat(routeDetails.clusterName()).isEqualTo(name(proxy));
+            assertThat(routeDetails.ingressName()).isEqualTo(name(proxy));
+            assertThat(routeDetails.routeTarget()).isEqualTo(routeFor);
+        });
         assertThat(openshiftRoute.getSpec().getSubdomain()).isEqualTo(routeName);
         assertThat(openshiftRoute.getSpec().getPort().getTargetPort()).isEqualTo(new IntOrString(targetPort));
         assertThat(openshiftRoute.getSpec().getTls().getTermination()).isEqualTo("passthrough");

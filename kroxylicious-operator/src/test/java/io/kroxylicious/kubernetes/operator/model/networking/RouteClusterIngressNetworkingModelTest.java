@@ -322,7 +322,6 @@ class RouteClusterIngressNetworkingModelTest {
     private static void routeBuildContainsMatchingNameAndRouteForValue(RouteBuilder routeBuilder, String routeName, RouteHostDetails.RouteFor routeFor) {
         Route build = routeBuilder.build();
         LinkedHashMap<String, String> orderedRouteLabels = commonLabels(PROXY_NAME);
-        orderedRouteLabels.put(RouteHostDetails.RouteFor.LABEL_KEY, String.valueOf(routeFor));
         assertThat(build.getMetadata()).isNotNull().satisfies(metadata -> {
             assertThat(metadata.getName()).isEqualTo(routeName);
             assertThat(metadata.getLabels()).containsExactlyEntriesOf(orderedRouteLabels);

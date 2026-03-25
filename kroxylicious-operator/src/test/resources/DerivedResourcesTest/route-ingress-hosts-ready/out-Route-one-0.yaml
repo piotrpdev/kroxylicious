@@ -10,7 +10,7 @@ kind: "Route"
 metadata:
   annotations:
     kroxylicious.io/managed-route: "{\"version\":\"0.20.0\",\"managedRoute\":{\"clusterName\"\
-            :\"one\",\"ingressName\":\"myopenshiftroute\",\"routeTarget\":\"NODE\"}}"
+                    :\"one\",\"ingressName\":\"myopenshiftroute\",\"routeTarget\":\"NODE\"}}"
   labels:
     app.kubernetes.io/managed-by: "kroxylicious-operator"
     app.kubernetes.io/name: "kroxylicious"

@@ -146,7 +146,7 @@ class RouteHostDetailsTest {
     @Test
     void fetchRouteHostDetailsListReturnsEmptyWhenRouteHasNoBootstrapServersAnnotation() {
         // given
-        ObjectMetaBuilder metaBuilder = metaWithRouteForValueAndBootstrapAnnotation(BOOTSTRAP.toString(), false);
+        ObjectMetaBuilder metaBuilder = metaWithRouteForValueAndBootstrapAnnotation(BOOTSTRAP, false);
 
         //@formatter:off
         Route route = new RouteBuilder()
@@ -169,7 +169,7 @@ class RouteHostDetailsTest {
     @Test
     void fetchRouteHostDetailsListReturnsEmptyWhenRouteHasEmptyIngress() {
         // given
-        ObjectMetaBuilder metaBuilder = metaWithRouteForValueAndBootstrapAnnotation(BOOTSTRAP.toString(), true);
+        ObjectMetaBuilder metaBuilder = metaWithRouteForValueAndBootstrapAnnotation(BOOTSTRAP, true);
 
         //@formatter:off
         Route route = new RouteBuilder()
@@ -217,34 +217,10 @@ class RouteHostDetailsTest {
         assertThat(result).isEmpty();
     }
 
-    //
-    @Test
-    void fetchRouteHostDetailsListReturnsEmptyWhenRouteForLabelIsInvalid() {
-        // given
-        ObjectMetaBuilder metaBuilder = metaWithRouteForValueAndBootstrapAnnotation("random", true);
-
-        //@formatter:off
-        Route route = new RouteBuilder()
-                .withMetadata(metaBuilder.build())
-                .withNewStatus()
-                    .withIngress(ingressWithHost(BOOTSTRAP_HOST_WITH_SUBDOMAIN))
-                .endStatus()
-                .build();
-        //@formatter:on
-
-        // when
-        when(context.getSecondaryResources(Route.class)).thenReturn(Set.of(route));
-
-        List<RouteHostDetails> result = RouteHostDetails.fetchRouteHostDetailsList(context);
-
-        // then
-        assertThat(result).isEmpty();
-    }
-
     @Test
     void fetchRouteHostDetailsListReturnsEmptyWhenHostHasNoSubdomain() {
         // given
-        ObjectMetaBuilder metaBuilder = metaWithRouteForValueAndBootstrapAnnotation(BOOTSTRAP.toString(), true);
+        ObjectMetaBuilder metaBuilder = metaWithRouteForValueAndBootstrapAnnotation(BOOTSTRAP, true);
 
         //@formatter:off
         Route route = new RouteBuilder()
@@ -267,7 +243,7 @@ class RouteHostDetailsTest {
     @Test
     void fetchRouteHostDetailsListReturnsDetailsForValidBootstrapRoute() {
         // given
-        ObjectMetaBuilder metaBuilder = metaWithRouteForValueAndBootstrapAnnotation(BOOTSTRAP.toString(), true);
+        ObjectMetaBuilder metaBuilder = metaWithRouteForValueAndBootstrapAnnotation(BOOTSTRAP, true);
 
         //@formatter:off
         Route route = new RouteBuilder()
@@ -296,7 +272,7 @@ class RouteHostDetailsTest {
     @Test
     void fetchRouteHostDetailsListReturnsDetailsForValidNodeRoute() {
         // given
-        ObjectMetaBuilder metaBuilder = metaWithRouteForValueAndBootstrapAnnotation(NODE.toString(), true);
+        ObjectMetaBuilder metaBuilder = metaWithRouteForValueAndBootstrapAnnotation(NODE, true);
 
         //@formatter:off
         Route route = new RouteBuilder()
@@ -322,7 +298,7 @@ class RouteHostDetailsTest {
     @Test
     void fetchRouteHostDetailsListStripsOnlyFirstHostSegment() {
         // given
-        ObjectMetaBuilder metaBuilder = metaWithRouteForValueAndBootstrapAnnotation(NODE.toString(), true);
+        ObjectMetaBuilder metaBuilder = metaWithRouteForValueAndBootstrapAnnotation(NODE, true);
 
         String hostWithFourSegments = "sub.apps.cluster.example.com";
         String hostWithThreeSegments = "apps.cluster.example.com";
@@ -350,7 +326,7 @@ class RouteHostDetailsTest {
     @Test
     void fetchRouteHostDetailsListFiltersOutInvalidRoutes() {
         // given
-        ObjectMetaBuilder metaBuilder = metaWithRouteForValueAndBootstrapAnnotation(NODE.toString(), false);
+        ObjectMetaBuilder metaBuilder = metaWithRouteForValueAndBootstrapAnnotation(NODE, false);
 
         // no annotation
         Route invalidRoute = new RouteBuilder()
@@ -360,8 +336,8 @@ class RouteHostDetailsTest {
                 .endStatus()
                 .build();
 
-        Annotations.annotateWithBootstrapServers(metaBuilder,
-                Set.of(new Annotations.ClusterIngressBootstrapServers(CLUSTER_NAME, INGRESS_NAME, UNRESOLVED_HOST_BOOTSTRAP_SERVERS)));
+        Annotations.annotateWithManagedRoute(metaBuilder,
+                new Annotations.ManagedRoute(CLUSTER_NAME, INGRESS_NAME, NODE));
 
         Route validRoute = new RouteBuilder()
                 .withMetadata(metaBuilder.build())
@@ -380,15 +356,14 @@ class RouteHostDetailsTest {
         assertThat(result.get(0).clusterName()).isEqualTo(CLUSTER_NAME);
     }
 
-    private static ObjectMetaBuilder metaWithRouteForValueAndBootstrapAnnotation(String routeForValue, boolean includeBootstrapAnnoation) {
+    private static ObjectMetaBuilder metaWithRouteForValueAndBootstrapAnnotation(RouteHostDetails.RouteFor routeForValue, boolean includeBootstrapAnnoation) {
         var metaBuilder = new ObjectMetaBuilder()
                 .withNamespace(NAMESPACE)
-                .addToLabels(commonLabels())
-                .addToLabels(Map.of(RouteHostDetails.RouteFor.LABEL_KEY, routeForValue));
+                .addToLabels(commonLabels());
 
         if (includeBootstrapAnnoation) {
-            Annotations.annotateWithBootstrapServers(metaBuilder,
-                    Set.of(new Annotations.ClusterIngressBootstrapServers(CLUSTER_NAME, INGRESS_NAME, UNRESOLVED_HOST_BOOTSTRAP_SERVERS)));
+            Annotations.annotateWithManagedRoute(metaBuilder,
+                    new Annotations.ManagedRoute(CLUSTER_NAME, INGRESS_NAME, routeForValue));
         }
 
         return metaBuilder;

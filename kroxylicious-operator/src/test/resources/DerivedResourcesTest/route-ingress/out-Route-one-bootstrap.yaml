@@ -9,15 +9,14 @@ apiVersion: "route.openshift.io/v1"
 kind: "Route"
 metadata:
   annotations:
-    kroxylicious.io/bootstrap-servers: "{\"version\":\"0.13.0\",\"bootstrapServers\"\
-      :[{\"clusterName\":\"one\",\"ingressName\":\"myopenshiftroute\",\"bootstrapServers\"\
-      :\"one-bootstrap.$(unresolvedRouteHost):9291\"}]}"
+    kroxylicious.io/managed-route: "{\"version\":\"0.20.0\",\"managedRoute\":{\"clusterName\"\
+          :\"one\",\"ingressName\":\"myopenshiftroute\",\"routeTarget\":\"BOOTSTRAP\"\
+          }}"
   labels:
     app.kubernetes.io/managed-by: "kroxylicious-operator"
     app.kubernetes.io/name: "kroxylicious"
     app.kubernetes.io/component: "proxy"
     app.kubernetes.io/instance: "minimal"
-    route-for: "bootstrap"
   name: "one-bootstrap"
   namespace: "proxy-ns"
   ownerReferences:

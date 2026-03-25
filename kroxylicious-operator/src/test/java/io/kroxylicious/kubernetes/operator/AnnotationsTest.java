@@ -144,7 +144,7 @@ class AnnotationsTest {
     }
 
     @Test
-    void readBootstrapServersFromAnnotationContainingBootstrapServers() {
+    void readBootstrapServersBootstrapServersFromAnnotationContainingBootstrapServers() {
         String value = "{\"version\":\"0.13.0\",\"bootstrapServers\":[{\"clusterName\":\"a\",\"ingressName\":\"b\",\"bootstrapServers\":\"" + BOOTSTRAP_SERVERS + "\"}]}";
         HasMetadata resource = new ServiceBuilder().withNewMetadata().withAnnotations(Map.of(Annotations.BOOTSTRAP_SERVERS_ANNOTATION_KEY, value)).endMetadata().build();
         Set<Annotations.ClusterIngressBootstrapServers> clusterIngressBootstrapServers = Annotations.readBootstrapServersFrom(resource);
@@ -167,7 +167,7 @@ class AnnotationsTest {
         Annotations.annotateWithBootstrapServers(meta, unsorted);
         assertThat(meta.getAnnotations()).containsKey(Annotations.BOOTSTRAP_SERVERS_ANNOTATION_KEY);
         String annotationValue = meta.getAnnotations().remove(Annotations.BOOTSTRAP_SERVERS_ANNOTATION_KEY);
-        Annotations.Wrapper decoded = new ObjectMapper().readValue(annotationValue, Annotations.Wrapper.class);
+        Annotations.BootstrapWrapper decoded = new ObjectMapper().readValue(annotationValue, Annotations.BootstrapWrapper.class);
         assertThat(decoded.bootstrapServers()).containsExactlyElementsOf(clusterIngressBootstrapServersInExpectedOrder);
     }
 }

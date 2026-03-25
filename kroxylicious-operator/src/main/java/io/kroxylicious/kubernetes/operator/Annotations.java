@@ -22,7 +22,9 @@ import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.api.model.ObjectMetaFluent;
 import io.fabric8.kubernetes.client.utils.KubernetesResourceUtil;
+import io.fabric8.openshift.api.model.Route;
 
+import io.kroxylicious.kubernetes.operator.model.RouteHostDetails;
 import io.kroxylicious.proxy.tag.VisibleForTesting;
 
 import edu.umd.cs.findbugs.annotations.NonNull;
@@ -36,6 +38,9 @@ public class Annotations {
 
     @VisibleForTesting
     static final String BOOTSTRAP_SERVERS_ANNOTATION_KEY = "kroxylicious.io/bootstrap-servers";
+
+    @VisibleForTesting
+    public static final String MANAGED_ROUTE_KEY = "kroxylicious.io/managed-route";
 
     @VisibleForTesting
     public static final String REFERENT_CHECKSUM_ANNOTATION_KEY = "kroxylicious.io/referent-checksum";
@@ -55,6 +60,17 @@ public class Annotations {
             return;
         }
         meta.addToAnnotations(BOOTSTRAP_SERVERS_ANNOTATION_KEY, toAnnotation(clusterIngressBootstrapServers));
+    }
+
+    /**
+     * Adds a `kroxylicious.io/bootstrap-servers`annotation to the supplied metadata fluent
+     * @param meta the Metadata fluent builder to add the annotation to
+     * @param managedRoute the managedd route to serialize into the annotation value
+     */
+    public static void annotateWithManagedRoute(ObjectMetaFluent<?> meta, ManagedRoute managedRoute) {
+        Objects.requireNonNull(meta);
+        Objects.requireNonNull(managedRoute);
+        meta.addToAnnotations(MANAGED_ROUTE_KEY, toAnnotation(managedRoute));
     }
 
     /**
@@ -99,7 +115,23 @@ public class Annotations {
             return Set.of();
         }
         else {
-            return fromAnnotation(annotations.get(BOOTSTRAP_SERVERS_ANNOTATION_KEY));
+            return bootstrapServersFromAnnotation(annotations.get(BOOTSTRAP_SERVERS_ANNOTATION_KEY));
+        }
+    }
+
+    /**
+     * Read managed route details from Route, extracting them from an `kroxylicious.io/managed-route`
+     * annotation if present.
+     * @param route the route to extract the managed route from
+     * @return the route from the metadata if the annotation is present, else empty
+     */
+    public static Optional<ManagedRoute> readManagedRouteFrom(Route route) {
+        Map<String, String> annotations = annotations(route);
+        if (!annotations.containsKey(MANAGED_ROUTE_KEY)) {
+            return Optional.empty();
+        }
+        else {
+            return Optional.of(managedRouteFromAnnotation(annotations.get(MANAGED_ROUTE_KEY)));
         }
     }
 
@@ -142,14 +174,39 @@ public class Annotations {
         }
     }
 
+    /**
+     * Describes a bootstrapServers string that we expect clients to use to connect with for a specific VirtualKafkaCluster
+     * and KafkaProxyIngress combination.
+     * @param clusterName VirtualKafkaCluster name
+     * @param ingressName KafkaProxyIngress name
+     * @param routeTarget target of the route
+     */
+    @JsonPropertyOrder({ "clusterName", "ingressName", "bootstrapServers" })
+    public record ManagedRoute(String clusterName, String ingressName, RouteHostDetails.RouteFor routeTarget) {
+        public ManagedRoute {
+            Objects.requireNonNull(clusterName);
+            Objects.requireNonNull(ingressName);
+            Objects.requireNonNull(routeTarget);
+        }
+    }
+
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @VisibleForTesting
     @JsonPropertyOrder({ "version", "bootstrapServers" })
-    record Wrapper(String version, List<ClusterIngressBootstrapServers> bootstrapServers) {
-        Wrapper {
+    record BootstrapWrapper(String version, List<ClusterIngressBootstrapServers> bootstrapServers) {
+        BootstrapWrapper {
             Objects.requireNonNull(version);
             Objects.requireNonNull(bootstrapServers);
+        }
+    }
+
+    @VisibleForTesting
+    @JsonPropertyOrder({ "version", "managedRout" })
+    record ManagedRouteWrapper(String version, ManagedRoute managedRoute) {
+        ManagedRouteWrapper {
+            Objects.requireNonNull(version);
+            Objects.requireNonNull(managedRoute);
         }
     }
 
@@ -158,19 +215,39 @@ public class Annotations {
                 .sorted(Comparator.comparing(ClusterIngressBootstrapServers::clusterName).thenComparing(ClusterIngressBootstrapServers::ingressName).thenComparing(
                         ClusterIngressBootstrapServers::bootstrapServers))
                 .toList();
-        Wrapper wrapper = new Wrapper("0.13.0", list);
+        BootstrapWrapper bootstrapWrapper = new BootstrapWrapper("0.13.0", list);
         try {
-            return OBJECT_MAPPER.writeValueAsString(wrapper);
+            return OBJECT_MAPPER.writeValueAsString(bootstrapWrapper);
         }
         catch (JsonProcessingException e) {
             throw new AnnotationSerializationException(e);
         }
     }
 
-    private static Set<ClusterIngressBootstrapServers> fromAnnotation(String bootstrapServers) {
+    private static String toAnnotation(ManagedRoute managedRoute) {
+        ManagedRouteWrapper bootstrapWrapper = new ManagedRouteWrapper("0.20.0", managedRoute);
         try {
-            Wrapper wrapper = OBJECT_MAPPER.readValue(bootstrapServers, Wrapper.class);
-            return new HashSet<>(wrapper.bootstrapServers());
+            return OBJECT_MAPPER.writeValueAsString(bootstrapWrapper);
+        }
+        catch (JsonProcessingException e) {
+            throw new AnnotationSerializationException(e);
+        }
+    }
+
+    private static Set<ClusterIngressBootstrapServers> bootstrapServersFromAnnotation(String bootstrapServers) {
+        try {
+            BootstrapWrapper bootstrapWrapper = OBJECT_MAPPER.readValue(bootstrapServers, BootstrapWrapper.class);
+            return new HashSet<>(bootstrapWrapper.bootstrapServers());
+        }
+        catch (JsonProcessingException e) {
+            throw new AnnotationSerializationException(e);
+        }
+    }
+
+    private static ManagedRoute managedRouteFromAnnotation(String managedRoute) {
+        try {
+            ManagedRouteWrapper bootstrapWrapper = OBJECT_MAPPER.readValue(managedRoute, ManagedRouteWrapper.class);
+            return bootstrapWrapper.managedRoute();
         }
         catch (JsonProcessingException e) {
             throw new AnnotationSerializationException(e);

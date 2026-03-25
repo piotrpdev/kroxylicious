@@ -10,13 +10,13 @@ kind: "Route"
 metadata:
   annotations:
     kroxylicious.io/managed-route: "{\"version\":\"0.20.0\",\"managedRoute\":{\"clusterName\"\
-            :\"one\",\"ingressName\":\"myopenshiftroute\",\"routeTarget\":\"NODE\"}}"
+                        :\"one\",\"ingressName\":\"myopenshiftroute\",\"routeTarget\":\"NODE\"}}"
   labels:
     app.kubernetes.io/managed-by: "kroxylicious-operator"
     app.kubernetes.io/name: "kroxylicious"
     app.kubernetes.io/component: "proxy"
     app.kubernetes.io/instance: "minimal"
-  name: "one-0"
+  name: "one-2"
   namespace: "proxy-ns"
   ownerReferences:
     - apiVersion: "kroxylicious.io/v1alpha1"
@@ -29,7 +29,7 @@ metadata:
       kind: "KafkaProxyIngress"
       name: "myopenshiftroute"
 spec:
-  subdomain: "one-0"
+  subdomain: "one-2"
   port:
     targetPort: 9291
   tls:

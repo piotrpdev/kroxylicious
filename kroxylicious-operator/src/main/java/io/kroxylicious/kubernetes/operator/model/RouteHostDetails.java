@@ -10,7 +10,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 import io.fabric8.openshift.api.model.Route;
 import io.fabric8.openshift.api.model.RouteIngress;
@@ -23,7 +22,7 @@ import io.kroxylicious.kubernetes.operator.Annotations;
 import io.kroxylicious.kubernetes.operator.model.networking.RouteClusterIngressNetworkingModel;
 import io.kroxylicious.proxy.config.SniHostIdentifiesNodeIdentificationStrategy;
 
-import static io.kroxylicious.kubernetes.operator.Annotations.readBootstrapServersFrom;
+import static io.kroxylicious.kubernetes.operator.Annotations.readManagedRouteFrom;
 
 /**
  * Record used for efficiently storing identifying information about a {@link Route}, along with its subdomain-less host.
@@ -104,29 +103,15 @@ public record RouteHostDetails(
     }
 
     private static Optional<RouteHostDetails> buildRouteHostDetails(Route route) {
-        Set<Annotations.ClusterIngressBootstrapServers> bootstrapServers = readBootstrapServersFrom(route);
-        if (bootstrapServers.isEmpty()) {
+        Optional<Annotations.ManagedRoute> maybeManagedRoute = readManagedRouteFrom(route);
+        if (maybeManagedRoute.isEmpty()) {
             return Optional.empty();
         }
-        var clusterIngressBootstrapServers = bootstrapServers.toArray(new Annotations.ClusterIngressBootstrapServers[0])[0];
-
+        Annotations.ManagedRoute managedRoute = maybeManagedRoute.get();
         List<RouteIngress> ingress = route.getStatus().getIngress();
         if (ingress.isEmpty()) {
             return Optional.empty();
         }
-
-        RouteFor routeFor;
-        try {
-            String routeForLabelValue = route.getMetadata().getLabels().get(RouteFor.LABEL_KEY);
-            if (routeForLabelValue == null) {
-                return Optional.empty();
-            }
-            routeFor = RouteFor.valueOf(routeForLabelValue.toUpperCase());
-        }
-        catch (IllegalArgumentException e) {
-            return Optional.empty();
-        }
-
         String hostWithSubdomain = ingress.get(0).getHost(); // one-bootstrap.apps-crc.testing
         ArrayList<String> splitHostWithSubdomain = new ArrayList<>(Arrays.asList(hostWithSubdomain.split("\\.")));
         if (splitHostWithSubdomain.size() < 2) {
@@ -137,9 +122,9 @@ public record RouteHostDetails(
 
         return Optional.of(new RouteHostDetails(
                 route.getMetadata().getNamespace(),
-                clusterIngressBootstrapServers.clusterName(),
-                clusterIngressBootstrapServers.ingressName(),
-                routeFor,
+                managedRoute.clusterName(),
+                managedRoute.ingressName(),
+                managedRoute.routeTarget(),
                 hostWithoutSubdomain));
     }
 }
