@@ -341,7 +341,15 @@ public class KrpcGenerator {
                 Map<String, Object> dm = new HashMap<>(dataModel);
                 dm.put("inputSpec", inputSpec);
                 if (inputSpec instanceof MessageSpec messageSpec) {
-                    dm.put("structRegistry", buildStructRegistry(messageSpec));
+                    var structRegistry = buildStructRegistry(messageSpec);
+                    var schemaLogic = new io.kroxylicious.krpccodegen.model.SchemaVersionLogic(messageSpec, structRegistry);
+                    dm.put("structRegistry", structRegistry);
+                    dm.put("snakeCase", new io.kroxylicious.krpccodegen.model.SnakeCaseMethod());
+                    dm.put("boxedElementType", new io.kroxylicious.krpccodegen.model.BoxedElementTypeMethod());
+                    dm.put("structHasKeys", new io.kroxylicious.krpccodegen.model.StructHasKeysMethod(structRegistry));
+                    dm.put("effectiveLow", new io.kroxylicious.krpccodegen.model.EffectiveLowMethod(schemaLogic));
+                    dm.put("structSchemaChangesAt", new io.kroxylicious.krpccodegen.model.StructSchemaChangesAtMethod(schemaLogic));
+                    dm.put("resolveSchemaVersion", new io.kroxylicious.krpccodegen.model.ResolveSchemaVersionMethod(schemaLogic));
                 }
                 return renderSingle(cfg, inputSpec, dm);
             }).sum();

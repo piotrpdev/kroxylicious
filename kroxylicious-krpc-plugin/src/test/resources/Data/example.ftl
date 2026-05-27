@@ -5,101 +5,19 @@
     Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
 
 -->
-<#-- ============================================================
-     Helper functions (no output produced)
-     ============================================================ -->
+<#--
+     The following functions are provided as Java TemplateMethodModels registered
+     in the template data model by KrpcGenerator, rather than being defined here:
 
-<#-- Convert PascalCase field name to snake_case for Schema Field declarations -->
-<#function snakeCase name>
-  <#return name?replace("(?<=[a-z])([A-Z])", "_$1", "r")?lower_case>
-</#function>
+       snakeCase(name)                          - SnakeCaseMethod
+       boxedElementType(elemType)               - BoxedElementTypeMethod
+       structHasKeys(field)                     - StructHasKeysMethod
+       effectiveLow(struct)                     - EffectiveLowMethod
+       structSchemaChangesAt(struct, version)   - StructSchemaChangesAtMethod
+       resolveSchemaVersion(struct, v, effLow)  - ResolveSchemaVersionMethod
 
-<#-- Returns true if the struct's schema changes between version-1 and version.
-     Checks field appearances/disappearances, tagged section changes, and
-     serialization format changes. Recursively checks sub-struct schemas. -->
-<#function structSchemaChangesAt struct version>
-  <#list struct.fields as field>
-    <#local fieldIsTaggedAtV   = field.taggedVersions.contains(version)>
-    <#local fieldIsTaggedAtPrev = field.taggedVersions.contains(version - 1)>
-    <#local fieldPresentAtV    = field.versions.contains(version)>
-    <#local fieldPresentAtPrev = field.versions.contains(version - 1)>
-    <#-- Non-tagged field appears at this version -->
-    <#if !fieldIsTaggedAtV && fieldPresentAtV && (!fieldPresentAtPrev || fieldIsTaggedAtPrev)>
-      <#return true>
-    </#if>
-    <#-- Non-tagged field disappears at this version -->
-    <#if !fieldIsTaggedAtPrev && fieldPresentAtPrev && (!fieldPresentAtV || fieldIsTaggedAtV)>
-      <#return true>
-    </#if>
-    <#-- Tagged field appears in TaggedFieldsSection -->
-    <#if fieldIsTaggedAtV && fieldPresentAtV && !(fieldIsTaggedAtPrev && fieldPresentAtPrev)>
-      <#return true>
-    </#if>
-    <#-- Tagged field disappears from TaggedFieldsSection -->
-    <#if fieldIsTaggedAtPrev && fieldPresentAtPrev && !(fieldIsTaggedAtV && fieldPresentAtV)>
-      <#return true>
-    </#if>
-    <#-- Serialization format changes (flexible/non-flexible) for non-tagged field present in both -->
-    <#if fieldPresentAtV && fieldPresentAtPrev && !fieldIsTaggedAtV && !fieldIsTaggedAtPrev && field.type.serializationIsDifferentInFlexibleVersions>
-      <#local effFlex = field.flexibleVersions.orElse(inputSpec.flexibleVersions)>
-      <#if effFlex.contains(version) != effFlex.contains(version - 1)>
-        <#return true>
-      </#if>
-    </#if>
-    <#-- Sub-struct schema changes -->
-    <#if (field.type.isStructArray || field.type.isStruct) && fieldPresentAtV && fieldPresentAtPrev && !fieldIsTaggedAtV && !fieldIsTaggedAtPrev>
-      <#if structSchemaChangesAt(structRegistry.findStruct(field), version)>
-        <#return true>
-      </#if>
-    </#if>
-  </#list>
-  <#return false>
-</#function>
-
-<#-- Returns the canonical schema version number for a struct at a given version.
-     Walks from effectiveLow up to version, finding the last version where the schema changed. -->
-<#function resolveSchemaVersion struct version effectiveLow>
-  <#local canonical = effectiveLow>
-  <#list effectiveLow..version as v>
-    <#if (v gt effectiveLow) && structSchemaChangesAt(struct, v)>
-      <#local canonical = v>
-    </#if>
-  </#list>
-  <#return canonical>
-</#function>
-
-<#-- Compute effective lowest version for a struct (max of struct's lowest and message's lowest) -->
-<#function effectiveLow struct>
-  <#local sl = struct.versions.lowest>
-  <#local ml = inputSpec.validVersions.lowest>
-  <#if (sl gt ml)><#return sl><#else><#return ml></#if>
-</#function>
-
-<#-- Boxed Java type for generic type parameters -->
-<#function boxedElementType elemType>
-  <#local t = elemType?string>
-  <#if t == 'int32'><#return "Integer">
-  <#elseif t == 'int64'><#return "Long">
-  <#elseif t == 'int8'><#return "Byte">
-  <#elseif t == 'int16'><#return "Short">
-  <#elseif t == 'bool'><#return "Boolean">
-  <#elseif t == 'uuid'><#return "Uuid">
-  <#else><#return t>
-  </#if>
-</#function>
-
-<#-- Returns true if the struct referenced by this field has any mapKey=true fields -->
-<#function structHasKeys field>
-  <#if field.type.isStructArray>
-    <#local substruct = structRegistry.findStruct(field)>
-    <#list substruct.fields as f>
-      <#if f.mapKey>
-        <#return true>
-      </#if>
-    </#list>
-  </#if>
-  <#return false>
-</#function>
+     See io.kroxylicious.krpccodegen.model for implementations.
+-->
 
 <#-- ============================================================
      Output macros
