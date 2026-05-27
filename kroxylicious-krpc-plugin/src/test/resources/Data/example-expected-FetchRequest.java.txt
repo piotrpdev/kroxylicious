@@ -21,7 +21,9 @@ package org.apache.kafka.common.message;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiMessage;
@@ -38,7 +40,11 @@ import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.apache.kafka.common.protocol.types.RawTaggedFieldWriter;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Type;
+import org.apache.kafka.common.record.internal.BaseRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
+import org.apache.kafka.common.utils.ImplicitLinkedHashMultiCollection;
 
 import static org.apache.kafka.common.protocol.types.Field.TaggedFieldsSection;
 
@@ -295,7 +301,7 @@ public class FetchRequestData implements ApiMessage {
                     if (arrayLength > _readable.remaining()) {
                         throw new RuntimeException("Tried to allocate a collection of size " + arrayLength + ", but there are only " + _readable.remaining() + " bytes remaining.");
                     }
-                    ArrayList<FetchTopic> newCollection = new ArrayList<>(arrayLength);
+                    ArrayList<FetchTopic> newCollection = new ArrayList<FetchTopic>(arrayLength);
                     for (int i = 0; i < arrayLength; i++) {
                         newCollection.add(new FetchTopic(_readable, _version));
                     }
@@ -310,7 +316,7 @@ public class FetchRequestData implements ApiMessage {
                     if (arrayLength > _readable.remaining()) {
                         throw new RuntimeException("Tried to allocate a collection of size " + arrayLength + ", but there are only " + _readable.remaining() + " bytes remaining.");
                     }
-                    ArrayList<FetchTopic> newCollection = new ArrayList<>(arrayLength);
+                    ArrayList<FetchTopic> newCollection = new ArrayList<FetchTopic>(arrayLength);
                     for (int i = 0; i < arrayLength; i++) {
                         newCollection.add(new FetchTopic(_readable, _version));
                     }
@@ -329,7 +335,7 @@ public class FetchRequestData implements ApiMessage {
                         if (arrayLength > _readable.remaining()) {
                             throw new RuntimeException("Tried to allocate a collection of size " + arrayLength + ", but there are only " + _readable.remaining() + " bytes remaining.");
                         }
-                        ArrayList<ForgottenTopic> newCollection = new ArrayList<>(arrayLength);
+                        ArrayList<ForgottenTopic> newCollection = new ArrayList<ForgottenTopic>(arrayLength);
                         for (int i = 0; i < arrayLength; i++) {
                             newCollection.add(new ForgottenTopic(_readable, _version));
                         }
@@ -344,7 +350,7 @@ public class FetchRequestData implements ApiMessage {
                         if (arrayLength > _readable.remaining()) {
                             throw new RuntimeException("Tried to allocate a collection of size " + arrayLength + ", but there are only " + _readable.remaining() + " bytes remaining.");
                         }
-                        ArrayList<ForgottenTopic> newCollection = new ArrayList<>(arrayLength);
+                        ArrayList<ForgottenTopic> newCollection = new ArrayList<ForgottenTopic>(arrayLength);
                         for (int i = 0; i < arrayLength; i++) {
                             newCollection.add(new ForgottenTopic(_readable, _version));
                         }
@@ -380,20 +386,16 @@ public class FetchRequestData implements ApiMessage {
                 int _size = _readable.readUnsignedVarint();
                 switch (_tag) {
                     case 0: {
-                        if (_version >= 12) {
-                            int length;
-                            length = _readable.readUnsignedVarint() - 1;
-                            if (length < 0) {
-                                this.clusterId = null;
-                            } else if (length > 0x7fff) {
-                                throw new RuntimeException("string field clusterId had invalid length " + length);
-                            } else {
-                                this.clusterId = _readable.readString(length);
-                            }
-                            break;
+                        int length;
+                        length = _readable.readUnsignedVarint() - 1;
+                        if (length < 0) {
+                            this.clusterId = null;
+                        } else if (length > 0x7fff) {
+                            throw new RuntimeException("string field clusterId had invalid length " + length);
                         } else {
-                            throw new RuntimeException("Tag 0 is not valid for version " + _version);
+                            this.clusterId = _readable.readString(length);
                         }
+                        break;
                     }
                     case 1: {
                         if (_version >= 15) {
@@ -489,14 +491,12 @@ public class FetchRequestData implements ApiMessage {
         _numTaggedFields += _rawWriter.numFields();
         if (_version >= 12) {
             _writable.writeUnsignedVarint(_numTaggedFields);
-            if (_version >= 12) {
-                if (clusterId != null) {
-                    _writable.writeUnsignedVarint(0);
-                    byte[] _stringBytes = _cache.getSerializedValue(this.clusterId);
-                    _writable.writeUnsignedVarint(_stringBytes.length + ByteUtils.sizeOfUnsignedVarint(_stringBytes.length + 1));
-                    _writable.writeUnsignedVarint(_stringBytes.length + 1);
-                    _writable.writeByteArray(_stringBytes);
-                }
+            if (clusterId != null) {
+                _writable.writeUnsignedVarint(0);
+                byte[] _stringBytes = _cache.getSerializedValue(this.clusterId);
+                _writable.writeUnsignedVarint(_stringBytes.length + ByteUtils.sizeOfUnsignedVarint(_stringBytes.length + 1));
+                _writable.writeUnsignedVarint(_stringBytes.length + 1);
+                _writable.writeByteArray(_stringBytes);
             }
             if (_version >= 15) {
                 {
@@ -852,13 +852,13 @@ MessageUtil.deepToString(forgottenTopicsData.iterator())
     public static final Schema SCHEMA_15 =
         new Schema(
             new Field("replica_id", Type.INT32, "The replica ID of the follower, or -1 if this request is from a consumer."),
-            new Field("replica_epoch", Type.INT64, "The epoch of this follower, or -1 if not available.")
+            new Field("replica_epoch", Type.INT64, "The epoch of this follower, or -1 if not available."),
             TaggedFieldsSection.of(
             )
         );
     public static final Schema SCHEMA_16 = SCHEMA_15;
-    public static final Schema SCHEMA_17 = SCHEMA_15;
-    public static final Schema SCHEMA_18 = SCHEMA_15;
+    public static final Schema SCHEMA_17 = SCHEMA_16;
+    public static final Schema SCHEMA_18 = SCHEMA_17;
 
     public static final Schema[] SCHEMAS = new Schema[] {
         null,
@@ -1051,43 +1051,43 @@ replicaEpoch.toString()
             new Field("partitions", new ArrayOf(FetchPartition.SCHEMA_5), "The partitions to fetch.")
         );
     public static final Schema SCHEMA_6 = SCHEMA_5;
-    public static final Schema SCHEMA_7 = SCHEMA_5;
-    public static final Schema SCHEMA_8 = SCHEMA_5;
+    public static final Schema SCHEMA_7 = SCHEMA_6;
+    public static final Schema SCHEMA_8 = SCHEMA_7;
     public static final Schema SCHEMA_9 =
         new Schema(
             new Field("topic", Type.STRING, "The name of the topic to fetch."),
             new Field("partitions", new ArrayOf(FetchPartition.SCHEMA_9), "The partitions to fetch.")
         );
     public static final Schema SCHEMA_10 = SCHEMA_9;
-    public static final Schema SCHEMA_11 = SCHEMA_9;
+    public static final Schema SCHEMA_11 = SCHEMA_10;
     public static final Schema SCHEMA_12 =
         new Schema(
             new Field("topic", Type.COMPACT_STRING, "The name of the topic to fetch."),
-            new Field("partitions", new CompactArrayOf(FetchPartition.SCHEMA_12), "The partitions to fetch.")
+            new Field("partitions", new CompactArrayOf(FetchPartition.SCHEMA_12), "The partitions to fetch."),
             TaggedFieldsSection.of(
             )
         );
     public static final Schema SCHEMA_13 =
         new Schema(
             new Field("topic_id", Type.UUID, "The unique topic ID."),
-            new Field("partitions", new CompactArrayOf(FetchPartition.SCHEMA_12), "The partitions to fetch.")
+            new Field("partitions", new CompactArrayOf(FetchPartition.SCHEMA_12), "The partitions to fetch."),
             TaggedFieldsSection.of(
             )
         );
     public static final Schema SCHEMA_14 = SCHEMA_13;
-    public static final Schema SCHEMA_15 = SCHEMA_13;
-    public static final Schema SCHEMA_16 = SCHEMA_13;
+    public static final Schema SCHEMA_15 = SCHEMA_14;
+    public static final Schema SCHEMA_16 = SCHEMA_15;
     public static final Schema SCHEMA_17 =
         new Schema(
             new Field("topic_id", Type.UUID, "The unique topic ID."),
-            new Field("partitions", new CompactArrayOf(FetchPartition.SCHEMA_17), "The partitions to fetch.")
+            new Field("partitions", new CompactArrayOf(FetchPartition.SCHEMA_17), "The partitions to fetch."),
             TaggedFieldsSection.of(
             )
         );
     public static final Schema SCHEMA_18 =
         new Schema(
             new Field("topic_id", Type.UUID, "The unique topic ID."),
-            new Field("partitions", new CompactArrayOf(FetchPartition.SCHEMA_18), "The partitions to fetch.")
+            new Field("partitions", new CompactArrayOf(FetchPartition.SCHEMA_18), "The partitions to fetch."),
             TaggedFieldsSection.of(
             )
         );
@@ -1175,7 +1175,7 @@ replicaEpoch.toString()
                     if (arrayLength > _readable.remaining()) {
                         throw new RuntimeException("Tried to allocate a collection of size " + arrayLength + ", but there are only " + _readable.remaining() + " bytes remaining.");
                     }
-                    ArrayList<FetchPartition> newCollection = new ArrayList<>(arrayLength);
+                    ArrayList<FetchPartition> newCollection = new ArrayList<FetchPartition>(arrayLength);
                     for (int i = 0; i < arrayLength; i++) {
                         newCollection.add(new FetchPartition(_readable, _version));
                     }
@@ -1190,7 +1190,7 @@ replicaEpoch.toString()
                     if (arrayLength > _readable.remaining()) {
                         throw new RuntimeException("Tried to allocate a collection of size " + arrayLength + ", but there are only " + _readable.remaining() + " bytes remaining.");
                     }
-                    ArrayList<FetchPartition> newCollection = new ArrayList<>(arrayLength);
+                    ArrayList<FetchPartition> newCollection = new ArrayList<FetchPartition>(arrayLength);
                     for (int i = 0; i < arrayLength; i++) {
                         newCollection.add(new FetchPartition(_readable, _version));
                     }
@@ -1417,8 +1417,8 @@ MessageUtil.deepToString(partitions.iterator())
             new Field("partition_max_bytes", Type.INT32, "The maximum bytes to fetch from this partition.  See KIP-74 for cases where this limit may not be honored.")
         );
     public static final Schema SCHEMA_6 = SCHEMA_5;
-    public static final Schema SCHEMA_7 = SCHEMA_5;
-    public static final Schema SCHEMA_8 = SCHEMA_5;
+    public static final Schema SCHEMA_7 = SCHEMA_6;
+    public static final Schema SCHEMA_8 = SCHEMA_7;
     public static final Schema SCHEMA_9 =
         new Schema(
             new Field("partition", Type.INT32, "The partition index."),
@@ -1428,7 +1428,7 @@ MessageUtil.deepToString(partitions.iterator())
             new Field("partition_max_bytes", Type.INT32, "The maximum bytes to fetch from this partition.  See KIP-74 for cases where this limit may not be honored.")
         );
     public static final Schema SCHEMA_10 = SCHEMA_9;
-    public static final Schema SCHEMA_11 = SCHEMA_9;
+    public static final Schema SCHEMA_11 = SCHEMA_10;
     public static final Schema SCHEMA_12 =
         new Schema(
             new Field("partition", Type.INT32, "The partition index."),
@@ -1436,14 +1436,14 @@ MessageUtil.deepToString(partitions.iterator())
             new Field("fetch_offset", Type.INT64, "The message offset."),
             new Field("last_fetched_epoch", Type.INT32, "The epoch of the last fetched record or -1 if there is none."),
             new Field("log_start_offset", Type.INT64, "The earliest available offset of the follower replica.  The field is only used when the request is sent by the follower."),
-            new Field("partition_max_bytes", Type.INT32, "The maximum bytes to fetch from this partition.  See KIP-74 for cases where this limit may not be honored.")
+            new Field("partition_max_bytes", Type.INT32, "The maximum bytes to fetch from this partition.  See KIP-74 for cases where this limit may not be honored."),
             TaggedFieldsSection.of(
             )
         );
     public static final Schema SCHEMA_13 = SCHEMA_12;
-    public static final Schema SCHEMA_14 = SCHEMA_12;
-    public static final Schema SCHEMA_15 = SCHEMA_12;
-    public static final Schema SCHEMA_16 = SCHEMA_12;
+    public static final Schema SCHEMA_14 = SCHEMA_13;
+    public static final Schema SCHEMA_15 = SCHEMA_14;
+    public static final Schema SCHEMA_16 = SCHEMA_15;
     public static final Schema SCHEMA_17 =
         new Schema(
             new Field("partition", Type.INT32, "The partition index."),
@@ -1850,28 +1850,28 @@ highWatermark.toString()
             new Field("partitions", new ArrayOf(Type.INT32), "The partitions indexes to forget.")
         );
     public static final Schema SCHEMA_8 = SCHEMA_7;
-    public static final Schema SCHEMA_9 = SCHEMA_7;
-    public static final Schema SCHEMA_10 = SCHEMA_7;
-    public static final Schema SCHEMA_11 = SCHEMA_7;
+    public static final Schema SCHEMA_9 = SCHEMA_8;
+    public static final Schema SCHEMA_10 = SCHEMA_9;
+    public static final Schema SCHEMA_11 = SCHEMA_10;
     public static final Schema SCHEMA_12 =
         new Schema(
             new Field("topic", Type.COMPACT_STRING, "The topic name."),
-            new Field("partitions", new CompactArrayOf(Type.INT32), "The partitions indexes to forget.")
+            new Field("partitions", new CompactArrayOf(Type.INT32), "The partitions indexes to forget."),
             TaggedFieldsSection.of(
             )
         );
     public static final Schema SCHEMA_13 =
         new Schema(
             new Field("topic_id", Type.UUID, "The unique topic ID."),
-            new Field("partitions", new CompactArrayOf(Type.INT32), "The partitions indexes to forget.")
+            new Field("partitions", new CompactArrayOf(Type.INT32), "The partitions indexes to forget."),
             TaggedFieldsSection.of(
             )
         );
     public static final Schema SCHEMA_14 = SCHEMA_13;
-    public static final Schema SCHEMA_15 = SCHEMA_13;
-    public static final Schema SCHEMA_16 = SCHEMA_13;
-    public static final Schema SCHEMA_17 = SCHEMA_13;
-    public static final Schema SCHEMA_18 = SCHEMA_13;
+    public static final Schema SCHEMA_15 = SCHEMA_14;
+    public static final Schema SCHEMA_16 = SCHEMA_15;
+    public static final Schema SCHEMA_17 = SCHEMA_16;
+    public static final Schema SCHEMA_18 = SCHEMA_17;
 
     public static final Schema[] SCHEMAS = new Schema[] {
         null,
@@ -1956,7 +1956,7 @@ highWatermark.toString()
                     if (arrayLength > _readable.remaining()) {
                         throw new RuntimeException("Tried to allocate a collection of size " + arrayLength + ", but there are only " + _readable.remaining() + " bytes remaining.");
                     }
-                    ArrayList<Integer> newCollection = new ArrayList<>(arrayLength);
+                    ArrayList<Integer> newCollection = new ArrayList<Integer>(arrayLength);
                     for (int i = 0; i < arrayLength; i++) {
                         newCollection.add(_readable.readInt());
                     }
@@ -1971,7 +1971,7 @@ highWatermark.toString()
                     if (arrayLength > _readable.remaining()) {
                         throw new RuntimeException("Tried to allocate a collection of size " + arrayLength + ", but there are only " + _readable.remaining() + " bytes remaining.");
                     }
-                    ArrayList<Integer> newCollection = new ArrayList<>(arrayLength);
+                    ArrayList<Integer> newCollection = new ArrayList<Integer>(arrayLength);
                     for (int i = 0; i < arrayLength; i++) {
                         newCollection.add(_readable.readInt());
                     }

@@ -113,6 +113,24 @@ class KrpcGeneratorTest {
     }
 
     @Test
+    void testKrpcResponseData(@TempDir File tempDir) throws Exception {
+        KrpcGenerator gen = KrpcGenerator.single()
+                .withMessageSpecDir(getMessageSpecDir())
+                .withMessageSpecFilter("FetchResponse.json")
+                .withTemplateDir(getTemplateDir())
+                .withTemplateNames(List.of("Data/example.ftl"))
+                .withOutputPackage("com.foo")
+                .withOutputDir(tempDir)
+                .withOutputFilePattern("${messageSpecName}.java")
+                .build();
+
+        gen.generate();
+
+        File file = join(tempDir, "com", "foo", "FetchResponse.java");
+        assertFileHasExpectedContents(file, "Data/example-expected-FetchResponse.java.txt");
+    }
+
+    @Test
     void testKproxyFilter(@TempDir File tempDir) throws Exception {
         KrpcGenerator gen = KrpcGenerator.single()
                 .withMessageSpecDir(getMessageSpecDir())
