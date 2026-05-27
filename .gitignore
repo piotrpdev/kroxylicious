@@ -113,3 +113,5 @@ docs/*.html
 .claude/projects/
 .claude/worktrees
 .claude/scheduled_tasks.lock
+
+.jqwik-database

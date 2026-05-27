@@ -85,7 +85,7 @@
 <#elseif field.type == 'bool'>Type.BOOLEAN
 <#elseif field.type == 'uuid'>Type.UUID
 <#elseif field.type == 'records'>
-  <#if isFlexible>Type.COMPACT_NULLABLE_RECORDS<#else>Type.NULLABLE_RECORDS</#if>
+  <#if isFlexible>Type.COMPACT_RECORDS<#else>Type.RECORDS</#if>
 <#elseif field.type == 'string'>
   <#if isFlexible><#if isNullable>Type.COMPACT_NULLABLE_STRING<#else>Type.COMPACT_STRING</#if>
   <#else><#if isNullable>Type.NULLABLE_STRING<#else>Type.STRING</#if></#if>
@@ -1273,6 +1273,7 @@ ${indent}}
 <#elseif field.type == 'records'>${field.name?uncap_first}
 <#elseif field.type.isArray>MessageUtil.deepToString(${field.name?uncap_first}.iterator())
 <#elseif field.type.canBeNullable && !field.type.isArray>((${field.name?uncap_first} == null) ? "null" : ${field.name?uncap_first}.toString())
+<#elseif field.type == 'int32' || field.type == 'int64' || field.type == 'int8' || field.type == 'int16' || field.type == 'bool'>${field.name?uncap_first}
 <#else>${field.name?uncap_first}.toString()
 </#if>
 </#list>
@@ -1305,7 +1306,12 @@ ${indent}}
 </#macro>
 
 <#-- Generates the FooCollection class for keyed struct arrays -->
-<#macro generateCollectionClass elemName>
+<#macro generateCollectionClass elemName struct>
+<#-- Collect map key fields to generate find/findAll methods with key field params -->
+<#local keyFields = []>
+<#list struct.fields as f>
+<#if f.mapKey><#local keyFields = keyFields + [f]></#if>
+</#list>
 
     public static class ${elemName}Collection extends ImplicitLinkedHashMultiCollection<${elemName}> {
         public ${elemName}Collection() {
@@ -1320,12 +1326,20 @@ ${indent}}
             super(iterator);
         }
 
-        public ${elemName} find(${elemName} key) {
-            return find((ImplicitLinkedHashMultiCollection.Element) key);
+        public ${elemName} find(<#list keyFields as kf><@javaFieldType field=kf/> ${kf.name?uncap_first}<#if kf?has_next>, </#if></#list>) {
+            ${elemName} _key = new ${elemName}();
+<#list keyFields as kf>
+            _key.set${kf.name}(${kf.name?uncap_first});
+</#list>
+            return find(_key);
         }
 
-        public java.util.List<${elemName}> findAll(${elemName} key) {
-            return findAll((ImplicitLinkedHashMultiCollection.Element) key);
+        public List<${elemName}> findAll(<#list keyFields as kf><@javaFieldType field=kf/> ${kf.name?uncap_first}<#if kf?has_next>, </#if></#list>) {
+            ${elemName} _key = new ${elemName}();
+<#list keyFields as kf>
+            _key.set${kf.name}(${kf.name?uncap_first});
+</#list>
+            return findAll(_key);
         }
 
         public ${elemName}Collection duplicate() {
@@ -1349,7 +1363,7 @@ ${indent}}
 <#local hasKeys = field.type.isStructArray && structHasKeys(field)>
 <@generateInnerClass struct=substruct effLo=innerEffLo effHi=innerEffHi dataClass=innerDataClass hasKeys=hasKeys/>
 <#if hasKeys>
-<@generateCollectionClass elemName=innerDataClass/>
+<@generateCollectionClass elemName=innerDataClass struct=substruct/>
 </#if>
 <#-- Recurse -->
 <@generateNestedClasses struct=substruct effLo=innerEffLo effHi=innerEffHi/>
@@ -1547,7 +1561,7 @@ ${indent}}
 
 // THIS CODE IS AUTOMATICALLY GENERATED.  DO NOT EDIT.
 
-package org.apache.kafka.common.message;
+package ${outputPackage};
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -1570,8 +1584,8 @@ import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.apache.kafka.common.protocol.types.RawTaggedFieldWriter;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Type;
-import org.apache.kafka.common.record.internal.BaseRecords;
-import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.BaseRecords;
+import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.ImplicitLinkedHashMultiCollection;
