@@ -393,7 +393,11 @@ ${indent}    int length;
 <#if field.zeroCopy>
 ${indent}    length = _readable.readUnsignedVarint() - 1;
 ${indent}    if (length < 0) {
+<#if isNullable>
+${indent}        this.${field.name?uncap_first} = null;
+<#else>
 ${indent}        throw new RuntimeException("non-nullable field ${field.name?uncap_first} was serialized as null");
+</#if>
 ${indent}    } else {
 ${indent}        this.${field.name?uncap_first} = _readable.readByteBuffer(length);
 ${indent}    }
