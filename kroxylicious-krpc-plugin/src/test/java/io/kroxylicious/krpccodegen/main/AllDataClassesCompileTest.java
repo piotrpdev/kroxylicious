@@ -5,6 +5,8 @@
  */
 package io.kroxylicious.krpccodegen.main;
 
+import java.nio.file.Files;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Assumptions;
@@ -29,14 +31,24 @@ class AllDataClassesCompileTest {
         Map<String, Class<?>> classes = GeneratedCodecHarness.generateAndLoadAll();
         assertThat(classes).as("Generated classes map must not be empty").isNotEmpty();
 
-        // Some specs (e.g. ControlledShutdown, LeaderAndIsr, StopReplica, UpdateMetadata in Kafka 4.x)
-        // have validVersions="none" meaning all their versions were removed and the generator skips them.
-        // We allow those gaps: require at least 80% of specs to have generated classes.
-        int specCount = GeneratedCodecHarness.allRequestResponseSpecNames().size();
-        int minExpected = (specCount * 4) / 5; // at least 80% of specs
-        assertThat(classes.size())
-                .as("At least %d of %d specs should have generated compilable classes", minExpected, specCount)
-                .isGreaterThanOrEqualTo(minExpected);
-        assertThat(classes).as("Generated classes map must not be empty").isNotEmpty();
+        // Every spec must either have a generated compilable class, or have
+        // validVersions="none" in its JSON file. validVersions="none" means all wire
+        // versions of that API were removed in Kafka 4.x (e.g. ControlledShutdown,
+        // LeaderAndIsr, StopReplica, UpdateMetadata) - the broker no longer supports
+        // them at all. KrpcGenerator skips those specs intentionally. Any other gap
+        // is a code-generation bug and will cause this assertion to fail with a clear
+        // message identifying the offending spec.
+        List<String> allSpecNames = GeneratedCodecHarness.allRequestResponseSpecNames();
+        for (String specName : allSpecNames) {
+            if (!classes.containsKey(specName + "Data")) {
+                String specContent = Files.readString(
+                        GeneratedCodecHarness.specDirectory().resolve(specName + ".json"));
+                assertThat(specContent)
+                        .as("Spec '%s' was not generated but does not declare validVersions=\"none\". "
+                                + "This is a code-generation bug - the template cannot handle this spec.",
+                                specName)
+                        .contains("\"validVersions\": \"none\"");
+            }
+        }
     }
 }

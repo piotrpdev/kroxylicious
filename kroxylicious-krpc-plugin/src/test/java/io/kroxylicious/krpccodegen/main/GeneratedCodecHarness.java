@@ -113,12 +113,18 @@ class GeneratedCodecHarness {
     }
 
     /**
+     * Returns the path of the directory containing Kafka message spec JSON files.
+     */
+    static Path specDirectory() throws URISyntaxException {
+        return buildDir().resolve("message-specs/common/message");
+    }
+
+    /**
      * Returns the names of all *Request.json and *Response.json message specs in the
      * test message spec directory, without the ".json" suffix.
      */
     static List<String> allRequestResponseSpecNames() throws URISyntaxException {
-        Path specDir = buildDir().resolve("message-specs/common/message");
-        File[] files = specDir.toFile().listFiles(
+        File[] files = specDirectory().toFile().listFiles(
                 f -> f.getName().endsWith("Request.json") || f.getName().endsWith("Response.json"));
         if (files == null) {
             return Collections.emptyList();

@@ -65,8 +65,13 @@ class AllDataClassesFidelityTest {
         String realClassName = "org.apache.kafka.common.message." + dataClassName;
 
         Class<?> generatedClass = generatedClasses.get().get(dataClassName);
+        // Some specs have validVersions="none" in Kafka 4.x, meaning all their wire
+        // versions were removed and the API is no longer in use. The KrpcGenerator
+        // filters those specs out (nothing is generated), so generatedClass is null
+        // and we simply skip the test rather than fail.
         Assumptions.assumeTrue(generatedClass != null,
-                "Generated class " + dataClassName + " not found — may have compilation issues");
+                dataClassName + " was not generated - spec has validVersions=\"none\" "
+                        + "(API fully removed in Kafka 4.x) or compilation failed");
 
         Class<?> realClass;
         try {
