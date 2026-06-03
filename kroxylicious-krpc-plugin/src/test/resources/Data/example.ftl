@@ -391,7 +391,11 @@ ${indent}}
 ${indent}{
 ${indent}    int length;
 <#if field.zeroCopy>
-${indent}    length = _readable.readUnsignedVarint() - 1;
+${indent}    if (_version >= ${fieldFlexLow}) {
+${indent}        length = _readable.readUnsignedVarint() - 1;
+${indent}    } else {
+${indent}        length = _readable.readInt();
+${indent}    }
 ${indent}    if (length < 0) {
 <#if isNullable>
 ${indent}        this.${field.name?uncap_first} = null;
@@ -1049,9 +1053,17 @@ ${indent}_writable.writeUuid(${field.name?uncap_first});
 <#if field.zeroCopy>
 ${indent}{
 ${indent}    if (${field.name?uncap_first} == null) {
-${indent}        _writable.writeUnsignedVarint(0);
+${indent}        if (_version >= ${fxLow}) {
+${indent}            _writable.writeUnsignedVarint(0);
+${indent}        } else {
+${indent}            _writable.writeInt(-1);
+${indent}        }
 ${indent}    } else {
-${indent}        _writable.writeUnsignedVarint(${field.name?uncap_first}.remaining() + 1);
+${indent}        if (_version >= ${fxLow}) {
+${indent}            _writable.writeUnsignedVarint(${field.name?uncap_first}.remaining() + 1);
+${indent}        } else {
+${indent}            _writable.writeInt(${field.name?uncap_first}.remaining());
+${indent}        }
 ${indent}        _writable.writeByteBuffer(${field.name?uncap_first}.duplicate());
 ${indent}    }
 ${indent}}
@@ -1393,10 +1405,18 @@ ${indent}_size.addBytes(16);
 <#if field.zeroCopy>
 ${indent}{
 ${indent}    if (${field.name?uncap_first} == null) {
-${indent}        _size.addBytes(1);
+${indent}        if (_version >= ${fxLow}) {
+${indent}            _size.addBytes(1);
+${indent}        } else {
+${indent}            _size.addBytes(4);
+${indent}        }
 ${indent}    } else {
 ${indent}        _size.addZeroCopyBytes(${field.name?uncap_first}.remaining());
-${indent}        _size.addBytes(ByteUtils.sizeOfUnsignedVarint(${field.name?uncap_first}.remaining() + 1));
+${indent}        if (_version >= ${fxLow}) {
+${indent}            _size.addBytes(ByteUtils.sizeOfUnsignedVarint(${field.name?uncap_first}.remaining() + 1));
+${indent}        } else {
+${indent}            _size.addBytes(4);
+${indent}        }
 ${indent}    }
 ${indent}}
 <#else>
