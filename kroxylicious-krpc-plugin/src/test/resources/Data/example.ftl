@@ -66,7 +66,8 @@
   <#if field.defaultString == 'null'>null
   <#elseif field.defaultString == ''><#if field.nullableVersions?has_content>null<#else>""</#if>
   <#else>"${field.defaultString}"</#if>
-<#elseif field.type.isStruct>new ${field.type}()
+<#elseif field.type.isStruct>
+  <#if field.nullableVersions?has_content>null<#else>new ${field.type}()</#if>
 <#elseif field.type.isStructArray>
   <#if structHasKeys(field)>new ${field.type.elementName}Collection(0)
   <#else>new ArrayList<${field.type.elementName}>(0)
@@ -532,7 +533,17 @@ ${indent}}
 <#elseif field.type.isArray>
 <@readArrayField field=field indent="            " effLo=effLo flexLow=flexLow/>
 <#elseif field.type.isStruct>
+<#if field.nullableVersions?has_content>
+            {
+                if (_readable.readByte() < 0) {
+                    this.${field.name?uncap_first} = null;
+                } else {
+                    this.${field.name?uncap_first} = new ${field.type}(_readable, _version);
+                }
+            }
+<#else>
             this.${field.name?uncap_first} = new ${field.type}(_readable, _version);
+</#if>
 <#else>
             this.${field.name?uncap_first} = <@readPrimitive field=field/>;
 </#if>
@@ -550,7 +561,17 @@ ${indent}}
 <#elseif field.type.isArray>
 <@readArrayField field=field indent="            " effLo=effLo flexLow=flexLow/>
 <#elseif field.type.isStruct>
+<#if field.nullableVersions?has_content>
+            {
+                if (_readable.readByte() < 0) {
+                    this.${field.name?uncap_first} = null;
+                } else {
+                    this.${field.name?uncap_first} = new ${field.type}(_readable, _version);
+                }
+            }
+<#else>
             this.${field.name?uncap_first} = new ${field.type}(_readable, _version);
+</#if>
 <#else>
             this.${field.name?uncap_first} = <@readPrimitive field=field/>;
 </#if>
@@ -569,7 +590,17 @@ ${indent}}
 <#elseif field.type.isArray>
 <@readArrayField field=field indent="            " effLo=effLo flexLow=flexLow/>
 <#elseif field.type.isStruct>
+<#if field.nullableVersions?has_content>
+            {
+                if (_readable.readByte() < 0) {
+                    this.${field.name?uncap_first} = null;
+                } else {
+                    this.${field.name?uncap_first} = new ${field.type}(_readable, _version);
+                }
+            }
+<#else>
             this.${field.name?uncap_first} = new ${field.type}(_readable, _version);
+</#if>
 <#else>
             this.${field.name?uncap_first} = <@readPrimitive field=field/>;
 </#if>
@@ -589,7 +620,17 @@ ${indent}}
 <#elseif field.type.isArray>
 <@readArrayField field=field indent="        " effLo=effLo flexLow=flexLow/>
 <#elseif field.type.isStruct>
+<#if field.nullableVersions?has_content>
+        {
+            if (_readable.readByte() < 0) {
+                this.${field.name?uncap_first} = null;
+            } else {
+                this.${field.name?uncap_first} = new ${field.type}(_readable, _version);
+            }
+        }
+<#else>
         this.${field.name?uncap_first} = new ${field.type}(_readable, _version);
+</#if>
 <#else>
         this.${field.name?uncap_first} = <@readPrimitive field=field/>;
 </#if>
@@ -739,7 +780,7 @@ this.${field.name?uncap_first} != null
 <#elseif field.type == 'records'>
 this.${field.name?uncap_first} != null
 <#elseif field.type.isStruct>
-!this.${field.name?uncap_first}.equals(new ${field.type}())
+<#if field.nullableVersions?has_content>this.${field.name?uncap_first} != null<#else>!this.${field.name?uncap_first}.equals(new ${field.type}())</#if>
 <#elseif field.type.isArray>
 !this.${field.name?uncap_first}.isEmpty()
 <#else>
@@ -1155,7 +1196,16 @@ ${indent}for (${elemName} ${field.name?uncap_first}Element : ${field.name?uncap_
 ${indent}}
 </#if>
 <#elseif field.type.isStruct>
+<#if field.nullableVersions?has_content>
+${indent}if (${field.name?uncap_first} == null) {
+${indent}    _writable.writeByte((byte) -1);
+${indent}} else {
+${indent}    _writable.writeByte((byte) 1);
+${indent}    ${field.name?uncap_first}.write(_writable, _cache, _version);
+${indent}}
+<#else>
 ${indent}${field.name?uncap_first}.write(_writable, _cache, _version);
+</#if>
 </#if>
 </#macro>
 
@@ -1502,7 +1552,14 @@ ${indent}    }
 ${indent}}
 </#if>
 <#elseif field.type.isStruct>
+<#if field.nullableVersions?has_content>
+${indent}_size.addBytes(1);
+${indent}if (${field.name?uncap_first} != null) {
+${indent}    ${field.name?uncap_first}.addSize(_size, _cache, _version);
+${indent}}
+<#else>
 ${indent}${field.name?uncap_first}.addSize(_size, _cache, _version);
+</#if>
 </#if>
 </#macro>
 
@@ -1594,7 +1651,15 @@ ${indent}${field.name?uncap_first}.addSize(_size, _cache, _version);
             _duplicate.${field.name?uncap_first} = ${field.name?uncap_first};
         }
 <#elseif field.type.isStruct>
+<#if field.nullableVersions?has_content>
+        if (${field.name?uncap_first} == null) {
+            _duplicate.${field.name?uncap_first} = null;
+        } else {
+            _duplicate.${field.name?uncap_first} = ${field.name?uncap_first}.duplicate();
+        }
+<#else>
         _duplicate.${field.name?uncap_first} = ${field.name?uncap_first}.duplicate();
+</#if>
 <#elseif field.type.isStructArray>
 <#local elemName = field.type.elementName>
 <#local hasKeys = structHasKeys(field)>
