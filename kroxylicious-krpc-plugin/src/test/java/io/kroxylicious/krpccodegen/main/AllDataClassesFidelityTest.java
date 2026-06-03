@@ -90,45 +90,21 @@ class AllDataClassesFidelityTest {
         short highest = realDefault.highestSupportedVersion();
 
         for (short version = lowest; version <= highest; version++) {
-            byte[] realBytes;
-            try {
-                realBytes = MessageSerdes.write(realDefault, version);
-            }
-            catch (Exception e) {
-                // Some specs throw for default instances at certain versions (non-ignorable fields).
-                // Skip that version rather than fail.
-                continue;
-            }
-
-            final short v = version;
+            byte[] realBytes = MessageSerdes.write(realDefault, version);
 
             // Byte fidelity: real → generated decode → re-encode == real bytes
-            Message generated;
-            try {
-                generated = MessageSerdes.read(
-                        GeneratedCodecHarness.newInstance(generatedClass), realBytes, version);
-            }
-            catch (Exception e) {
-                // Known limitation: some features are not yet fully supported in the generated
-                // codec. Skip this version and continue checking the others.
-                continue;
-            }
-            byte[] generatedBytes;
-            try {
-                generatedBytes = MessageSerdes.write(generated, version);
-            }
-            catch (Exception e) {
-                continue;
-            }
+            Message generated = MessageSerdes.read(
+                    GeneratedCodecHarness.newInstance(generatedClass), realBytes, version);
+            byte[] generatedBytes = MessageSerdes.write(generated, version);
             assertThat(generatedBytes)
-                    .as("%s byte fidelity at version %d", dataClassName, v)
+                    .as("%s byte fidelity at version %d", dataClassName, version)
                     .isEqualTo(realBytes);
 
             // Round-trip identity for the real codec
             ApiMessage decoded = (ApiMessage) realClass.getDeclaredConstructor().newInstance();
-            MessageSerdes.read((Message) decoded, realBytes, version);
-            assertThat(MessageSerdes.write((Message) decoded, version))
-                    .as("%s round-trip identity at version %d", dataClassName, v)
+            MessageSerdes.read(decoded, realBytes, version);
+            assertThat(MessageSerdes.write(decoded, version))
+                    .as("%s round-trip identity at version %d", dataClassName, version)
                     .isEqualTo(realBytes);
         }
     }
