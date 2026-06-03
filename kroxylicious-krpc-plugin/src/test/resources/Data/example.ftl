@@ -29,11 +29,13 @@
 <#elseif field.type == 'int64'>long
 <#elseif field.type == 'int8'>byte
 <#elseif field.type == 'int16'>short
+<#elseif field.type == 'uint16'>int
 <#elseif field.type == 'bool'>boolean
 <#elseif field.type == 'uuid'>Uuid
 <#elseif field.type == 'string'>String
 <#elseif field.type == 'float64'>double
 <#elseif field.type == 'records'>BaseRecords
+<#elseif field.type == 'bytes'><#if field.zeroCopy>ByteBuffer<#else>byte[]</#if>
 <#elseif field.type.isStructArray>
   <#if structHasKeys(field)>${field.type.elementName}Collection
   <#else>List<${field.type.elementName}>
@@ -49,9 +51,17 @@
 <#elseif field.type == 'int8'><#if field.defaultString == ''>(byte) 0<#else>(byte) ${field.defaultString}</#if>
 <#elseif field.type == 'int16'><#if field.defaultString == ''>(short) 0<#else>(short) ${field.defaultString}</#if>
 <#elseif field.type == 'int32'><#if field.defaultString == ''>0<#else>${field.defaultString}</#if>
+<#elseif field.type == 'uint16'><#if field.defaultString == ''>0<#else>${field.defaultString}</#if>
+<#elseif field.type == 'float64'><#if field.defaultString == ''>0.0<#else>${field.defaultString}</#if>
 <#elseif field.type == 'bool'><#if field.defaultString == ''>false<#else>${field.defaultString}</#if>
 <#elseif field.type == 'uuid'>Uuid.ZERO_UUID
 <#elseif field.type == 'records'>null
+<#elseif field.type == 'bytes'>
+  <#if field.zeroCopy>
+    <#if field.nullableVersions?has_content && field.defaultString == 'null'>null<#else>ByteUtils.EMPTY_BUF</#if>
+  <#else>
+    <#if field.nullableVersions?has_content && field.defaultString == 'null'>null<#else>Bytes.EMPTY</#if>
+  </#if>
 <#elseif field.type == 'string'><#if field.defaultString == 'null'>null<#elseif field.defaultString == ''>""<#else>"${field.defaultString}"</#if>
 <#elseif field.type.isStruct>new ${field.type}()
 <#elseif field.type.isStructArray>
@@ -63,14 +73,18 @@
 </#compress></#macro>
 
 <#-- Schema Type.XXX for a primitive type -->
-<#macro primitiveSchemaType type><#compress>
+<#macro primitiveSchemaType type flexibleFlag=false><#compress>
 <#if type == 'int32'>Type.INT32
 <#elseif type == 'int64'>Type.INT64
 <#elseif type == 'int8'>Type.INT8
 <#elseif type == 'int16'>Type.INT16
+<#elseif type == 'uint16'>Type.UINT16
+<#elseif type == 'float64'>Type.FLOAT64
 <#elseif type == 'bool'>Type.BOOLEAN
 <#elseif type == 'uuid'>Type.UUID
-<#else>Type.UNKNOWN</#if>
+<#elseif type == 'string'><#if flexibleFlag>Type.COMPACT_STRING<#else>Type.STRING</#if>
+<#elseif type == 'bytes'><#if flexibleFlag>Type.COMPACT_BYTES<#else>Type.BYTES</#if>
+<#else>Type.BYTES</#if>
 </#compress></#macro>
 
 <#-- Schema type expression for a field at a given version -->
@@ -82,10 +96,15 @@
 <#elseif field.type == 'int64'>Type.INT64
 <#elseif field.type == 'int8'>Type.INT8
 <#elseif field.type == 'int16'>Type.INT16
+<#elseif field.type == 'uint16'>Type.UINT16
+<#elseif field.type == 'float64'>Type.FLOAT64
 <#elseif field.type == 'bool'>Type.BOOLEAN
 <#elseif field.type == 'uuid'>Type.UUID
 <#elseif field.type == 'records'>
   <#if isFlexible>Type.COMPACT_RECORDS<#else>Type.RECORDS</#if>
+<#elseif field.type == 'bytes'>
+  <#if isFlexible><#if isNullable>Type.COMPACT_NULLABLE_BYTES<#else>Type.COMPACT_BYTES</#if>
+  <#else><#if isNullable>Type.NULLABLE_BYTES<#else>Type.BYTES</#if></#if>
 <#elseif field.type == 'string'>
   <#if isFlexible><#if isNullable>Type.COMPACT_NULLABLE_STRING<#else>Type.COMPACT_STRING</#if>
   <#else><#if isNullable>Type.NULLABLE_STRING<#else>Type.STRING</#if></#if>
@@ -101,7 +120,7 @@
     </#if>
   <#else>
     <#if isFlexible>
-      <#if isNullable>CompactArrayOf.nullable(<@primitiveSchemaType type=elemType/>)<#else>new CompactArrayOf(<@primitiveSchemaType type=elemType/>)</#if>
+      <#if isNullable>CompactArrayOf.nullable(<@primitiveSchemaType type=elemType flexibleFlag=true/>)<#else>new CompactArrayOf(<@primitiveSchemaType type=elemType flexibleFlag=true/>)</#if>
     <#else>
       <#if isNullable>ArrayOf.nullable(<@primitiveSchemaType type=elemType/>)<#else>new ArrayOf(<@primitiveSchemaType type=elemType/>)</#if>
     </#if>
@@ -197,6 +216,8 @@
 <#elseif field.type == 'int64'>_readable.readLong()
 <#elseif field.type == 'int8'>_readable.readByte()
 <#elseif field.type == 'int16'>_readable.readShort()
+<#elseif field.type == 'uint16'>_readable.readUnsignedShort()
+<#elseif field.type == 'float64'>_readable.readDouble()
 <#elseif field.type == 'bool'>_readable.readByte() != 0
 <#elseif field.type == 'uuid'>_readable.readUuid()
 <#else>null /* UNKNOWN */</#if>
@@ -211,12 +232,22 @@
 <#local hasKeys = structHasKeys(field)>
 <#local collType = hasKeys?then("${elemName}Collection", "ArrayList<${isStruct?then(elemName, boxedElementType(field.type.elementType))}>")>
 <#local boxedElem = isStruct?then(elemName, boxedElementType(field.type.elementType))>
-<#local readElem = isStruct?then("new ${elemName}(_readable, _version)", "_readable.readInt()")>
 <#local isNullable = field.nullableVersions?has_content>
-<#if !field.type.isStructArray && field.type.elementType == 'int64'>
-  <#local readElem = "_readable.readLong()">
-<#elseif !field.type.isStructArray && field.type.elementType == 'int8'>
-  <#local readElem = "_readable.readByte()">
+<#-- Compute per-element read expression for non-struct arrays -->
+<#local readElem = isStruct?then("new ${elemName}(_readable, _version)", "")>
+<#local elemIsString = !isStruct && (field.type.elementType?string == 'string')>
+<#if !isStruct && !elemIsString>
+  <#local et = field.type.elementType?string>
+  <#if et == 'int32'><#local readElem = "_readable.readInt()">
+  <#elseif et == 'int64'><#local readElem = "_readable.readLong()">
+  <#elseif et == 'int8'><#local readElem = "_readable.readByte()">
+  <#elseif et == 'int16'><#local readElem = "_readable.readShort()">
+  <#elseif et == 'uint16'><#local readElem = "_readable.readUnsignedShort()">
+  <#elseif et == 'bool'><#local readElem = "(_readable.readByte() != 0)">
+  <#elseif et == 'uuid'><#local readElem = "_readable.readUuid()">
+  <#elseif et == 'float64'><#local readElem = "_readable.readDouble()">
+  <#else><#local readElem = "_readable.readInt()">
+  </#if>
 </#if>
 <#if effFlex?has_content>
 ${indent}{
@@ -233,10 +264,19 @@ ${indent}        } else {
 ${indent}            if (arrayLength > _readable.remaining()) {
 ${indent}                throw new RuntimeException("Tried to allocate a collection of size " + arrayLength + ", but there are only " + _readable.remaining() + " bytes remaining.");
 ${indent}            }
+<#if elemIsString>
+${indent}            ${collType} newCollection = new ${collType}(arrayLength);
+${indent}            for (int i = 0; i < arrayLength; i++) {
+${indent}                int _eLen = _readable.readUnsignedVarint() - 1;
+${indent}                if (_eLen < 0) throw new RuntimeException("non-nullable string in ${field.name?uncap_first} was null");
+${indent}                newCollection.add(_readable.readString(_eLen));
+${indent}            }
+<#else>
 ${indent}            ${collType} newCollection = new ${collType}(arrayLength);
 ${indent}            for (int i = 0; i < arrayLength; i++) {
 ${indent}                newCollection.add(${readElem});
 ${indent}            }
+</#if>
 ${indent}            this.${field.name?uncap_first} = newCollection;
 ${indent}        }
 ${indent}    } else {
@@ -252,10 +292,19 @@ ${indent}        } else {
 ${indent}            if (arrayLength > _readable.remaining()) {
 ${indent}                throw new RuntimeException("Tried to allocate a collection of size " + arrayLength + ", but there are only " + _readable.remaining() + " bytes remaining.");
 ${indent}            }
+<#if elemIsString>
+${indent}            ${collType} newCollection = new ${collType}(arrayLength);
+${indent}            for (int i = 0; i < arrayLength; i++) {
+${indent}                int _eLen = _readable.readUnsignedVarint() - 1;
+${indent}                if (_eLen < 0) throw new RuntimeException("non-nullable string in ${field.name?uncap_first} was null");
+${indent}                newCollection.add(_readable.readString(_eLen));
+${indent}            }
+<#else>
 ${indent}            ${collType} newCollection = new ${collType}(arrayLength);
 ${indent}            for (int i = 0; i < arrayLength; i++) {
 ${indent}                newCollection.add(${readElem});
 ${indent}            }
+</#if>
 ${indent}            this.${field.name?uncap_first} = newCollection;
 ${indent}        }
 ${indent}    }
@@ -274,10 +323,19 @@ ${indent}    } else {
 ${indent}        if (arrayLength > _readable.remaining()) {
 ${indent}            throw new RuntimeException("Tried to allocate a collection of size " + arrayLength + ", but there are only " + _readable.remaining() + " bytes remaining.");
 ${indent}        }
+<#if elemIsString>
+${indent}        ${collType} newCollection = new ${collType}(arrayLength);
+${indent}        for (int i = 0; i < arrayLength; i++) {
+${indent}            int _eLen = (int) _readable.readShort();
+${indent}            if (_eLen < 0) throw new RuntimeException("non-nullable string in ${field.name?uncap_first} was null");
+${indent}            newCollection.add(_readable.readString(_eLen));
+${indent}        }
+<#else>
 ${indent}        ${collType} newCollection = new ${collType}(arrayLength);
 ${indent}        for (int i = 0; i < arrayLength; i++) {
 ${indent}            newCollection.add(${readElem});
 ${indent}        }
+</#if>
 ${indent}        this.${field.name?uncap_first} = newCollection;
 ${indent}    }
 ${indent}}
@@ -323,6 +381,97 @@ ${indent}}
 </#macro>
 
 <#-- Read a records field -->
+<#macro readBytesField field indent flexLow>
+<#local isNullable = field.nullableVersions?has_content>
+${indent}{
+${indent}    int length;
+<#if field.zeroCopy>
+${indent}    length = _readable.readUnsignedVarint() - 1;
+${indent}    if (length < 0) {
+${indent}        throw new RuntimeException("non-nullable field ${field.name?uncap_first} was serialized as null");
+${indent}    } else {
+${indent}        this.${field.name?uncap_first} = _readable.readByteBuffer(length);
+${indent}    }
+<#else>
+${indent}    if (_version >= ${flexLow}) {
+${indent}        length = _readable.readUnsignedVarint() - 1;
+${indent}    } else {
+${indent}        length = _readable.readInt();
+${indent}    }
+${indent}    if (length < 0) {
+<#if isNullable>
+${indent}        this.${field.name?uncap_first} = null;
+<#else>
+${indent}        throw new RuntimeException("non-nullable field ${field.name?uncap_first} was serialized as null");
+</#if>
+${indent}    } else {
+${indent}        byte[] newBytes = _readable.readArray(length);
+${indent}        this.${field.name?uncap_first} = newBytes;
+${indent}    }
+</#if>
+${indent}}
+</#macro>
+
+<#-- Write a single non-struct array element -->
+<#macro writeArrayElem elemTypeName elemVar indent fxLow>
+<#if elemTypeName == 'int32'>
+${indent}_writable.writeInt(${elemVar});
+<#elseif elemTypeName == 'int64'>
+${indent}_writable.writeLong(${elemVar});
+<#elseif elemTypeName == 'int8'>
+${indent}_writable.writeByte(${elemVar});
+<#elseif elemTypeName == 'int16'>
+${indent}_writable.writeShort(${elemVar});
+<#elseif elemTypeName == 'uint16'>
+${indent}_writable.writeUnsignedShort(${elemVar});
+<#elseif elemTypeName == 'bool'>
+${indent}_writable.writeByte(${elemVar} ? (byte) 1 : (byte) 0);
+<#elseif elemTypeName == 'uuid'>
+${indent}_writable.writeUuid(${elemVar});
+<#elseif elemTypeName == 'float64'>
+${indent}_writable.writeDouble(${elemVar});
+<#elseif elemTypeName == 'string'>
+${indent}{
+${indent}    byte[] _sBytes = _cache.getSerializedValue(${elemVar});
+${indent}    if (_version >= ${fxLow}) {
+${indent}        _writable.writeUnsignedVarint(_sBytes.length + 1);
+${indent}    } else {
+${indent}        _writable.writeShort((short) _sBytes.length);
+${indent}    }
+${indent}    _writable.writeByteArray(_sBytes);
+${indent}}
+<#else>
+${indent}_writable.writeInt(${elemVar});
+</#if>
+</#macro>
+
+<#-- Add size of a single non-struct array element -->
+<#macro addSizeArrayElem elemTypeName elemVar indent fxLow>
+<#if elemTypeName == 'int32'>
+${indent}_size.addBytes(4);
+<#elseif elemTypeName == 'int64' || elemTypeName == 'float64'>
+${indent}_size.addBytes(8);
+<#elseif elemTypeName == 'int8' || elemTypeName == 'bool'>
+${indent}_size.addBytes(1);
+<#elseif elemTypeName == 'int16' || elemTypeName == 'uint16'>
+${indent}_size.addBytes(2);
+<#elseif elemTypeName == 'uuid'>
+${indent}_size.addBytes(16);
+<#elseif elemTypeName == 'string'>
+${indent}{
+${indent}    byte[] _sBytes = ${elemVar}.getBytes(StandardCharsets.UTF_8);
+${indent}    _cache.cacheSerializedValue(${elemVar}, _sBytes);
+${indent}    if (_version >= ${fxLow}) {
+${indent}        _size.addBytes(_sBytes.length + ByteUtils.sizeOfUnsignedVarint(_sBytes.length + 1));
+${indent}    } else {
+${indent}        _size.addBytes(_sBytes.length + 2);
+${indent}    }
+${indent}}
+<#else>
+${indent}_size.addBytes(4);
+</#if>
+</#macro>
+
 <#macro readRecordsField field indent flexLow>
 ${indent}{
 ${indent}    int length;
@@ -373,6 +522,8 @@ ${indent}}
 <@readStringField field=field indent="            " effFlex=effFlex/>
 <#elseif field.type == 'records'>
 <@readRecordsField field=field indent="            " flexLow=flexLow/>
+<#elseif field.type == 'bytes'>
+<@readBytesField field=field indent="            " flexLow=flexLow/>
 <#elseif field.type.isArray>
 <@readArrayField field=field indent="            " effLo=effLo flexLow=flexLow/>
 <#elseif field.type.isStruct>
@@ -389,6 +540,8 @@ ${indent}}
 <@readStringField field=field indent="            " effFlex=effFlex/>
 <#elseif field.type == 'records'>
 <@readRecordsField field=field indent="            " flexLow=flexLow/>
+<#elseif field.type == 'bytes'>
+<@readBytesField field=field indent="            " flexLow=flexLow/>
 <#elseif field.type.isArray>
 <@readArrayField field=field indent="            " effLo=effLo flexLow=flexLow/>
 <#elseif field.type.isStruct>
@@ -407,6 +560,8 @@ ${indent}}
         }
 <#elseif field.type == 'records'>
 <@readRecordsField field=field indent="        " flexLow=flexLow/>
+<#elseif field.type == 'bytes'>
+<@readBytesField field=field indent="        " flexLow=flexLow/>
 <#elseif field.type.isArray>
 <@readArrayField field=field indent="        " effLo=effLo flexLow=flexLow/>
 <#elseif field.type.isStruct>
@@ -543,16 +698,20 @@ ${indent}}
 
 <#-- Non-default check expression for write/addSize error messages -->
 <#macro nonDefaultCheck field><#compress>
-<#if field.type == 'int32' || field.type == 'int8' || field.type == 'int16'>
+<#if field.type == 'int32' || field.type == 'int8' || field.type == 'int16' || field.type == 'uint16'>
 this.${field.name?uncap_first} != ${(field.defaultString == '')?then("0", field.defaultString)}
 <#elseif field.type == 'int64'>
 this.${field.name?uncap_first} != ${(field.defaultString == '')?then("0L", field.defaultString + "L")}
+<#elseif field.type == 'float64'>
+this.${field.name?uncap_first} != ${(field.defaultString == '')?then("0.0", field.defaultString)}
 <#elseif field.type == 'bool'>
 this.${field.name?uncap_first} != ${(field.defaultString == '')?then("false", field.defaultString)}
 <#elseif field.type == 'uuid'>
 !this.${field.name?uncap_first}.equals(Uuid.ZERO_UUID)
 <#elseif field.type == 'string'>
 <#if field.nullableVersions?has_content>this.${field.name?uncap_first} != null<#else>!this.${field.name?uncap_first}.isEmpty()</#if>
+<#elseif field.type == 'bytes'>
+this.${field.name?uncap_first} != null
 <#elseif field.type == 'records'>
 this.${field.name?uncap_first} != null
 <#elseif field.type.isStruct>
@@ -743,6 +902,29 @@ this.${field.name?uncap_first} != null</#if>
                 }
             }
 </#if>
+<#elseif field.type.isArray>
+<#-- Tagged non-struct array (e.g. []uuid): write tag, cached size, elements -->
+<#local elemName = boxedElementType(field.type.elementType)>
+<#local elemTypeName = field.type.elementType?string>
+<#if needVersionGuard>
+                if (!this.${field.name?uncap_first}.isEmpty()) {
+                    _writable.writeUnsignedVarint(${field.tagInteger});
+                    _writable.writeUnsignedVarint(_cache.getArraySizeInBytes(this.${field.name?uncap_first}));
+                    _writable.writeUnsignedVarint(${field.name?uncap_first}.size() + 1);
+                    for (${elemName} ${field.name?uncap_first}Element : ${field.name?uncap_first}) {
+<@writeArrayElem elemTypeName=elemTypeName elemVar="${field.name?uncap_first}Element" indent="                        " fxLow=flexLow/>
+                    }
+                }
+<#else>
+            if (!this.${field.name?uncap_first}.isEmpty()) {
+                _writable.writeUnsignedVarint(${field.tagInteger});
+                _writable.writeUnsignedVarint(_cache.getArraySizeInBytes(this.${field.name?uncap_first}));
+                _writable.writeUnsignedVarint(${field.name?uncap_first}.size() + 1);
+                for (${elemName} ${field.name?uncap_first}Element : ${field.name?uncap_first}) {
+<@writeArrayElem elemTypeName=elemTypeName elemVar="${field.name?uncap_first}Element" indent="                    " fxLow=flexLow/>
+                }
+            }
+</#if>
 </#if>
 <#if needVersionGuard>
             }
@@ -776,10 +958,53 @@ ${indent}_writable.writeLong(${field.name?uncap_first});
 ${indent}_writable.writeByte(${field.name?uncap_first});
 <#elseif field.type == 'int16'>
 ${indent}_writable.writeShort(${field.name?uncap_first});
+<#elseif field.type == 'uint16'>
+${indent}_writable.writeUnsignedShort(${field.name?uncap_first});
+<#elseif field.type == 'float64'>
+${indent}_writable.writeDouble(${field.name?uncap_first});
 <#elseif field.type == 'bool'>
 ${indent}_writable.writeByte(${field.name?uncap_first} ? (byte) 1 : (byte) 0);
 <#elseif field.type == 'uuid'>
 ${indent}_writable.writeUuid(${field.name?uncap_first});
+<#elseif field.type == 'bytes'>
+<#if field.zeroCopy>
+${indent}{
+${indent}    if (${field.name?uncap_first} == null) {
+${indent}        _writable.writeUnsignedVarint(0);
+${indent}    } else {
+${indent}        _writable.writeUnsignedVarint(${field.name?uncap_first}.remaining() + 1);
+${indent}        _writable.writeByteBuffer(${field.name?uncap_first}.duplicate());
+${indent}    }
+${indent}}
+<#else>
+<#if isNullable>
+${indent}{
+${indent}    if (${field.name?uncap_first} == null) {
+${indent}        if (_version >= ${fxLow}) {
+${indent}            _writable.writeUnsignedVarint(0);
+${indent}        } else {
+${indent}            _writable.writeInt(-1);
+${indent}        }
+${indent}    } else {
+${indent}        if (_version >= ${fxLow}) {
+${indent}            _writable.writeUnsignedVarint(${field.name?uncap_first}.length + 1);
+${indent}        } else {
+${indent}            _writable.writeInt(${field.name?uncap_first}.length);
+${indent}        }
+${indent}        _writable.writeByteArray(${field.name?uncap_first});
+${indent}    }
+${indent}}
+<#else>
+${indent}{
+${indent}    if (_version >= ${fxLow}) {
+${indent}        _writable.writeUnsignedVarint(${field.name?uncap_first}.length + 1);
+${indent}    } else {
+${indent}        _writable.writeInt(${field.name?uncap_first}.length);
+${indent}    }
+${indent}    _writable.writeByteArray(${field.name?uncap_first});
+${indent}}
+</#if>
+</#if>
 <#elseif field.type == 'records'>
 ${indent}if (_version >= ${fxLow}) {
 ${indent}    if (${field.name?uncap_first} == null) {
@@ -865,6 +1090,7 @@ ${indent}}
 </#if>
 <#elseif field.type.isArray>
 <#local elemName = boxedElementType(field.type.elementType)>
+<#local elemTypeName = field.type.elementType?string>
 <#if isNullable>
 ${indent}if (_version >= ${fxLow}) {
 ${indent}    if (${field.name?uncap_first} == null) {
@@ -881,7 +1107,7 @@ ${indent}    }
 ${indent}}
 ${indent}if (${field.name?uncap_first} != null) {
 ${indent}    for (${elemName} ${field.name?uncap_first}Element : ${field.name?uncap_first}) {
-${indent}        _writable.writeInt(${field.name?uncap_first}Element);
+<@writeArrayElem elemTypeName=elemTypeName elemVar="${field.name?uncap_first}Element" indent="${indent}        " fxLow=fxLow/>
 ${indent}    }
 ${indent}}
 <#else>
@@ -891,7 +1117,7 @@ ${indent}} else {
 ${indent}    _writable.writeInt(${field.name?uncap_first}.size());
 ${indent}}
 ${indent}for (${elemName} ${field.name?uncap_first}Element : ${field.name?uncap_first}) {
-${indent}    _writable.writeInt(${field.name?uncap_first}Element);
+<@writeArrayElem elemTypeName=elemTypeName elemVar="${field.name?uncap_first}Element" indent="${indent}    " fxLow=fxLow/>
 ${indent}}
 </#if>
 </#if>
@@ -984,6 +1210,26 @@ ${indent}}
                 _size.addBytes(8);
             }
         }
+<#elseif field.type.isArray>
+<#-- Tagged non-struct array (e.g. []uuid): compute array size and cache it -->
+<#local elemName = boxedElementType(field.type.elementType)>
+<#local elemTypeName = field.type.elementType?string>
+            if (!this.${field.name?uncap_first}.isEmpty()) {
+                _numTaggedFields++;
+                _size.addBytes(1);
+                int _sizeBeforeArray = _size.totalSize();
+                _size.addBytes(ByteUtils.sizeOfUnsignedVarint(${field.name?uncap_first}.size() + 1));
+                for (${elemName} ${field.name?uncap_first}Element : ${field.name?uncap_first}) {
+<@addSizeArrayElem elemTypeName=elemTypeName elemVar="${field.name?uncap_first}Element" indent="                    " fxLow=flexLow/>
+                }
+                int _arraySize = _size.totalSize() - _sizeBeforeArray;
+                _cache.setArraySizeInBytes(${field.name?uncap_first}, _arraySize);
+                _size.addBytes(ByteUtils.sizeOfUnsignedVarint(_arraySize));
+            }
+        }
+<#else>
+<#-- Unknown tagged field type - still close the outer if block -->
+        }
 </#if>
 <#else>
 <#-- Non-tagged field size -->
@@ -1040,10 +1286,53 @@ ${indent}_size.addBytes(8);
 ${indent}_size.addBytes(1);
 <#elseif field.type == 'int16'>
 ${indent}_size.addBytes(2);
+<#elseif field.type == 'uint16'>
+${indent}_size.addBytes(2);
+<#elseif field.type == 'float64'>
+${indent}_size.addBytes(8);
 <#elseif field.type == 'bool'>
 ${indent}_size.addBytes(1);
 <#elseif field.type == 'uuid'>
 ${indent}_size.addBytes(16);
+<#elseif field.type == 'bytes'>
+<#if field.zeroCopy>
+${indent}{
+${indent}    if (${field.name?uncap_first} == null) {
+${indent}        _size.addBytes(1);
+${indent}    } else {
+${indent}        _size.addZeroCopyBytes(${field.name?uncap_first}.remaining());
+${indent}        _size.addBytes(ByteUtils.sizeOfUnsignedVarint(${field.name?uncap_first}.remaining() + 1));
+${indent}    }
+${indent}}
+<#else>
+<#if isNullable>
+${indent}{
+${indent}    if (${field.name?uncap_first} == null) {
+${indent}        if (_version >= ${fxLow}) {
+${indent}            _size.addBytes(1);
+${indent}        } else {
+${indent}            _size.addBytes(4);
+${indent}        }
+${indent}    } else {
+${indent}        _size.addBytes(${field.name?uncap_first}.length);
+${indent}        if (_version >= ${fxLow}) {
+${indent}            _size.addBytes(ByteUtils.sizeOfUnsignedVarint(${field.name?uncap_first}.length + 1));
+${indent}        } else {
+${indent}            _size.addBytes(4);
+${indent}        }
+${indent}    }
+${indent}}
+<#else>
+${indent}{
+${indent}    _size.addBytes(${field.name?uncap_first}.length);
+${indent}    if (_version >= ${fxLow}) {
+${indent}        _size.addBytes(ByteUtils.sizeOfUnsignedVarint(${field.name?uncap_first}.length + 1));
+${indent}    } else {
+${indent}        _size.addBytes(4);
+${indent}    }
+${indent}}
+</#if>
+</#if>
 <#elseif field.type == 'records'>
 ${indent}if (_version >= ${fxLow}) {
 ${indent}    if (${field.name?uncap_first} == null) {
@@ -1138,21 +1427,24 @@ ${indent}    }
 ${indent}}
 </#if>
 <#elseif field.type.isArray>
+<#local elemName = boxedElementType(field.type.elementType)>
+<#local elemTypeName = field.type.elementType?string>
 <#if isNullable>
 ${indent}{
-${indent}    if (_version >= ${fxLow}) {
-${indent}        if (${field.name?uncap_first} == null) {
-${indent}            _size.addBytes(1);
-${indent}        } else {
+${indent}    if (${field.name?uncap_first} != null) {
+${indent}        if (_version >= ${fxLow}) {
 ${indent}            _size.addBytes(ByteUtils.sizeOfUnsignedVarint(${field.name?uncap_first}.size() + 1));
-${indent}            _size.addBytes(${field.name?uncap_first}.size() * 4);
+${indent}        } else {
+${indent}            _size.addBytes(4);
+${indent}        }
+${indent}        for (${elemName} ${field.name?uncap_first}Element : ${field.name?uncap_first}) {
+<@addSizeArrayElem elemTypeName=elemTypeName elemVar="${field.name?uncap_first}Element" indent="${indent}            " fxLow=fxLow/>
 ${indent}        }
 ${indent}    } else {
-${indent}        if (${field.name?uncap_first} == null) {
-${indent}            _size.addBytes(4);
+${indent}        if (_version >= ${fxLow}) {
+${indent}            _size.addBytes(1);
 ${indent}        } else {
 ${indent}            _size.addBytes(4);
-${indent}            _size.addBytes(${field.name?uncap_first}.size() * 4);
 ${indent}        }
 ${indent}    }
 ${indent}}
@@ -1163,7 +1455,9 @@ ${indent}        _size.addBytes(ByteUtils.sizeOfUnsignedVarint(${field.name?unca
 ${indent}    } else {
 ${indent}        _size.addBytes(4);
 ${indent}    }
-${indent}    _size.addBytes(${field.name?uncap_first}.size() * 4);
+${indent}    for (${elemName} ${field.name?uncap_first}Element : ${field.name?uncap_first}) {
+<@addSizeArrayElem elemTypeName=elemTypeName elemVar="${field.name?uncap_first}Element" indent="${indent}        " fxLow=fxLow/>
+${indent}    }
 ${indent}}
 </#if>
 </#if>
@@ -1178,6 +1472,10 @@ ${indent}}
 <#list struct.fields as field>
 <#if field.type == 'records'>
         if (!Objects.equals(this.${field.name?uncap_first}, other.${field.name?uncap_first})) return false;
+<#elseif field.type == 'bytes' && field.zeroCopy>
+        if (!Objects.equals(this.${field.name?uncap_first}, other.${field.name?uncap_first})) return false;
+<#elseif field.type == 'bytes'>
+        if (!Arrays.equals(this.${field.name?uncap_first}, other.${field.name?uncap_first})) return false;
 <#elseif field.type.canBeNullable>
         if (this.${field.name?uncap_first} == null) {
             if (other.${field.name?uncap_first} != null) return false;
@@ -1201,6 +1499,12 @@ ${indent}}
 <#list struct.fields as field>
 <#if field.type == 'records'>
         hashCode = 31 * hashCode + Objects.hashCode(${field.name?uncap_first});
+<#elseif field.type == 'bytes' && field.zeroCopy>
+        hashCode = 31 * hashCode + Objects.hashCode(${field.name?uncap_first});
+<#elseif field.type == 'bytes'>
+        hashCode = 31 * hashCode + Arrays.hashCode(${field.name?uncap_first});
+<#elseif field.type == 'float64'>
+        hashCode = 31 * hashCode + Double.hashCode(${field.name?uncap_first});
 <#elseif field.type.canBeNullable>
         hashCode = 31 * hashCode + (${field.name?uncap_first} == null ? 0 : ${field.name?uncap_first}.hashCode());
 <#elseif field.type == 'uuid'>
@@ -1227,6 +1531,18 @@ ${indent}}
             _duplicate.${field.name?uncap_first} = null;
         } else {
             _duplicate.${field.name?uncap_first} = MemoryRecords.readableRecords(((MemoryRecords) ${field.name?uncap_first}).buffer().duplicate());
+        }
+<#elseif field.type == 'bytes' && field.zeroCopy>
+        if (${field.name?uncap_first} == null) {
+            _duplicate.${field.name?uncap_first} = null;
+        } else {
+            _duplicate.${field.name?uncap_first} = ${field.name?uncap_first}.duplicate();
+        }
+<#elseif field.type == 'bytes'>
+        if (${field.name?uncap_first} == null) {
+            _duplicate.${field.name?uncap_first} = null;
+        } else {
+            _duplicate.${field.name?uncap_first} = Arrays.copyOf(${field.name?uncap_first}, ${field.name?uncap_first}.length);
         }
 <#elseif field.type == 'string' && field.nullableVersions?has_content>
         if (${field.name?uncap_first} == null) {
@@ -1271,9 +1587,11 @@ ${indent}}
 <#if !field?is_first>            + ", ${field.name?uncap_first}=" + <#else>            + "${field.name?uncap_first}=" + </#if>
 <#if field.type == 'string'>((${field.name?uncap_first} == null) ? "null" : "'" + ${field.name?uncap_first}.toString() + "'")
 <#elseif field.type == 'records'>${field.name?uncap_first}
+<#elseif field.type == 'bytes'>
+<#if field.zeroCopy>${field.name?uncap_first}<#else>Arrays.toString(${field.name?uncap_first})</#if>
 <#elseif field.type.isArray>MessageUtil.deepToString(${field.name?uncap_first}.iterator())
 <#elseif field.type.canBeNullable && !field.type.isArray>((${field.name?uncap_first} == null) ? "null" : ${field.name?uncap_first}.toString())
-<#elseif field.type == 'int32' || field.type == 'int64' || field.type == 'int8' || field.type == 'int16' || field.type == 'bool'>${field.name?uncap_first}
+<#elseif field.type == 'int32' || field.type == 'int64' || field.type == 'int8' || field.type == 'int16' || field.type == 'uint16' || field.type == 'float64' || field.type == 'bool'>${field.name?uncap_first}
 <#else>${field.name?uncap_first}.toString()
 </#if>
 </#list>
@@ -1361,12 +1679,16 @@ ${indent}}
 <#local innerEffHi = inputSpec.validVersions.highest>
 <#local innerDataClass = field.type.isStructArray?then(field.type.elementName, field.type?string)>
 <#local hasKeys = field.type.isStructArray && structHasKeys(field)>
+<#-- Deduplicate: commonStructs may be referenced by multiple fields; only generate each class once -->
+<#if !generatedStructNames?seq_contains(innerDataClass)>
+<#global generatedStructNames = generatedStructNames + [innerDataClass]>
 <@generateInnerClass struct=substruct effLo=innerEffLo effHi=innerEffHi dataClass=innerDataClass hasKeys=hasKeys/>
 <#if hasKeys>
 <@generateCollectionClass elemName=innerDataClass struct=substruct/>
 </#if>
 <#-- Recurse -->
 <@generateNestedClasses struct=substruct effLo=innerEffLo effHi=innerEffHi/>
+</#if>
 </#if>
 </#list>
 </#macro>
@@ -1542,6 +1864,8 @@ ${indent}}
 <#assign effLo = validVersions.lowest>
 <#assign effHi = validVersions.highest>
 <#assign topStruct = inputSpec.struct>
+<#-- Track generated inner class names to avoid duplicates from commonStructs -->
+<#global generatedStructNames = []>
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
@@ -1563,8 +1887,10 @@ ${indent}}
 
 package ${outputPackage};
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
@@ -1586,6 +1912,7 @@ import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.ImplicitLinkedHashMultiCollection;

@@ -13,7 +13,11 @@ import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -66,6 +70,63 @@ class GeneratedCodecHarness {
                 new URL[]{ tempDir.toUri().toURL() },
                 Thread.currentThread().getContextClassLoader());
         return loader.loadClass(TEST_PACKAGE + "." + dataClassName);
+    }
+
+    /**
+     * Generates, compiles and loads all {@code *Data} classes for all *Request.json
+     * and *Response.json message specs.
+     *
+     * @return unmodifiable map from simple class name (e.g. {@code "FetchRequestData"})
+     *         to loaded {@link Class}, or an empty map if no JDK compiler is available
+     */
+    @SuppressWarnings("java:S2095") // URLClassLoader intentionally kept open
+    static Map<String, Class<?>> generateAndLoadAll() throws Exception {
+        if (ToolProvider.getSystemJavaCompiler() == null) {
+            return Collections.emptyMap();
+        }
+
+        Path tempDir = Files.createTempDirectory("krpc-all-");
+        generate("*{Request,Response}.json", tempDir.toFile());
+        compile(tempDir);
+
+        URLClassLoader loader = new URLClassLoader(
+                new URL[]{ tempDir.toUri().toURL() },
+                Thread.currentThread().getContextClassLoader());
+
+        Map<String, Class<?>> result = new HashMap<>();
+        try (Stream<Path> stream = Files.walk(tempDir)) {
+            stream.filter(p -> p.toString().endsWith(".class") && !p.toString().contains("$"))
+                    .forEach(p -> {
+                        String relative = tempDir.relativize(p).toString()
+                                .replace(File.separatorChar, '.')
+                                .replace(".class", "");
+                        String simpleName = relative.substring(relative.lastIndexOf('.') + 1);
+                        try {
+                            result.put(simpleName, loader.loadClass(relative));
+                        }
+                        catch (ClassNotFoundException e) {
+                            throw new IllegalStateException("Cannot load " + relative, e);
+                        }
+                    });
+        }
+        return Collections.unmodifiableMap(result);
+    }
+
+    /**
+     * Returns the names of all *Request.json and *Response.json message specs in the
+     * test message spec directory, without the ".json" suffix.
+     */
+    static List<String> allRequestResponseSpecNames() throws URISyntaxException {
+        Path specDir = buildDir().resolve("message-specs/common/message");
+        File[] files = specDir.toFile().listFiles(
+                f -> f.getName().endsWith("Request.json") || f.getName().endsWith("Response.json"));
+        if (files == null) {
+            return Collections.emptyList();
+        }
+        return Arrays.stream(files)
+                .map(f -> f.getName().replace(".json", ""))
+                .sorted()
+                .collect(Collectors.toList());
     }
 
     /** Creates a new instance of the loaded generated class, cast to {@link Message}. */

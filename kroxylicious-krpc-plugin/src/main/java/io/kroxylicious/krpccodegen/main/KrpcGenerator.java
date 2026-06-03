@@ -590,6 +590,10 @@ public class KrpcGenerator {
         // Do not fall back to higher scopes when reading a null loop variable:
         cfg.setFallbackOnNullLoopVariable(false);
 
+        // Use computer-friendly number format (no locale-specific thousands separators).
+        // Without this, Short.MAX_VALUE (32767) would be rendered as "32,767" in Java code.
+        cfg.setNumberFormat("computer");
+
         cfg.setObjectWrapper(new KrpcSchemaObjectWrapper(version));
 
         cfg.setSharedVariable("outputPackage", outputPackage);

@@ -23,8 +23,10 @@ public class BoxedElementTypeMethod implements TemplateMethodModelEx {
             "int64", "Long",
             "int8", "Byte",
             "int16", "Short",
+            "uint16", "Integer",
             "bool", "Boolean",
-            "uuid", "Uuid");
+            "uuid", "Uuid",
+            "string", "String");
 
     /**
      * Constructs a BoxedElementTypeMethod.
