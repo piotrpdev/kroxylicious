@@ -710,7 +710,7 @@ ${indent}}
                             throw new RuntimeException("Tag ${field.tagInteger} is not valid for version " + _version);
                         }
 <#else>
-<#-- tagged field available in all flex versions -->
+<#-- tagged field available in all flex versions (taggedVersions.lowest == flexLow) -->
 <#if field.type == 'string'>
 <#local isNullable = field.nullableVersions?has_content>
                         int length;
@@ -753,6 +753,24 @@ ${indent}}
                         break;
 <#elseif field.type.isStruct>
                         this.${field.name?uncap_first} = new ${field.type}(_readable, _version);
+                        break;
+<#elseif field.type == 'uuid'>
+                        this.${field.name?uncap_first} = _readable.readUuid();
+                        break;
+<#elseif field.type == 'int64'>
+                        this.${field.name?uncap_first} = _readable.readLong();
+                        break;
+<#elseif field.type == 'int32'>
+                        this.${field.name?uncap_first} = _readable.readInt();
+                        break;
+<#elseif field.type == 'int16'>
+                        this.${field.name?uncap_first} = _readable.readShort();
+                        break;
+<#elseif field.type == 'int8'>
+                        this.${field.name?uncap_first} = _readable.readByte();
+                        break;
+<#elseif field.type == 'bool'>
+                        this.${field.name?uncap_first} = _readable.readByte() != 0;
                         break;
 </#if>
 </#if>

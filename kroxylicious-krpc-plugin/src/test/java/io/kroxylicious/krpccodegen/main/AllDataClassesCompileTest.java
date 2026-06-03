@@ -16,15 +16,44 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Verifies that the kroxylicious {@code Data/example.ftl} template can generate
- * compilable Java source code for ALL {@code *Request} and {@code *Response} Kafka
- * message specs, covering all field types (including {@code uint16}, {@code bytes},
- * {@code float64}, {@code records}) and struct patterns ({@code commonStructs}, keyed
- * collections, nested tagged fields).
+ * compilable Java source code for ALL Kafka message specs, covering all field types
+ * (including {@code uint16}, {@code bytes}, {@code float64}, {@code records}) and
+ * struct patterns ({@code commonStructs}, keyed collections, nested tagged fields).
+ *
+ * <p><strong>Kafka version tracking.</strong> The spec JSON files are extracted from
+ * the {@code kafka-clients} jar at build time. This test acts as a canary: if a
+ * kafka-clients upgrade introduces new spec files or removes existing ones, the
+ * {@code specCountMatchesKafkaClientsVersion} test will fail and force an explicit
+ * review.  Update {@code EXPECTED_SPEC_COUNT} when bumping kafka-clients.
  */
 class AllDataClassesCompileTest {
 
+    /**
+     * Total number of JSON spec files expected in the message-specs directory for
+     * kafka-clients {@code 4.2.0}.  Update this constant when bumping kafka-clients —
+     * a change here is a deliberate acknowledgement that new/removed APIs have been
+     * reviewed and the template tested against them.
+     */
+    private static final int EXPECTED_SPEC_COUNT = 198;
+
+    /**
+     * Guards against silent spec drift when kafka-clients is bumped.  If Kafka adds
+     * or removes API specs without this test being updated, the build fails loudly
+     * rather than silently accepting an incomplete picture.
+     */
     @Test
-    void allRequestResponseSpecsGenerateCompilableCode() throws Exception {
+    void specCountMatchesKafkaClientsVersion() throws Exception {
+        int actual = GeneratedCodecHarness.allSpecNames().size();
+        assertThat(actual)
+                .as("Spec count has changed from the expected %d. "
+                        + "If you bumped kafka-clients, update EXPECTED_SPEC_COUNT in this class "
+                        + "after reviewing added/removed specs and running the fidelity tests.",
+                        EXPECTED_SPEC_COUNT)
+                .isEqualTo(EXPECTED_SPEC_COUNT);
+    }
+
+    @Test
+    void allSpecsGenerateCompilableCode() throws Exception {
         Assumptions.assumeTrue(javax.tools.ToolProvider.getSystemJavaCompiler() != null,
                 "JDK compiler not available — skipping compilation test");
 
