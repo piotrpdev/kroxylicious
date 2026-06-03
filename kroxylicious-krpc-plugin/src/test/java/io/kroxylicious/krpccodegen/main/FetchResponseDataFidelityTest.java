@@ -80,9 +80,9 @@ class FetchResponseDataFidelityTest {
                            @ForAll("fetchResponses") FetchResponseData msg,
                            @ForAll @ShortRange(min = 4, max = 18) short version) {
         byte[] bytes = MessageSerdes.write(msg, version);
-        assertThat(MessageSerdes.read(new FetchResponseData(), bytes, version))
-                .as("decode(encode(msg)) at version %d must equal the original", version)
-                .isEqualTo(MessageSerdes.read(new FetchResponseData(), bytes, version));
+        assertThat(MessageSerdes.write(MessageSerdes.read(new FetchResponseData(), bytes, version), version))
+                .as("re-encode(decode(encode(msg))) at version %d must equal encode(msg)", version)
+                .isEqualTo(bytes);
     }
 
     @Property(tries = 100)

@@ -182,9 +182,15 @@ public class KrpcGenerator {
 
         /**
          * configures the pattern used to form the output file name.
-         * This understands two pattern {@code ${messageSpecName}} and {@code ${templateName}}
-         * which if present will be replaced by the message specification name the template
-         * name respectively.
+         * The following tokens are substituted when present:
+         * <ul>
+         *   <li>{@code ${messageSpecName}} - the message specification name (e.g. {@code FetchRequest})</li>
+         *   <li>{@code ${messageSpecDataClassName}} - the generated Java class name as determined by
+         *       {@code MessageSpec.dataClassName()}: appends {@code "Data"} for Request/Response/Header
+         *       specs (e.g. {@code FetchRequestData}) and uses the raw name for other spec types
+         *       (e.g. {@code EndTxnMarker})</li>
+         *   <li>{@code ${templateName}} - the template file name without its {@code .ftl} extension</li>
+         * </ul>
          *
          * @param outputFilePattern output filename pattern.
          * @return this

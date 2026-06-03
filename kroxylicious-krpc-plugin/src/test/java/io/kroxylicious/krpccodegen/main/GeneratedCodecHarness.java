@@ -136,6 +136,18 @@ class GeneratedCodecHarness {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Returns the generated Data class name for a spec, applying the same rule as
+     * {@code MessageSpec.dataClassName()}: append "Data" only when the spec name ends
+     * with "Request", "Response", or "Header"; otherwise use the raw name.
+     */
+    static String dataClassNameFor(String specName) {
+        if (specName.endsWith("Request") || specName.endsWith("Response") || specName.endsWith("Header")) {
+            return specName + "Data";
+        }
+        return specName;
+    }
+
     /** Creates a new instance of the loaded generated class, cast to {@link Message}. */
     static Message newInstance(Class<?> generatedClass) throws Exception {
         return (Message) generatedClass.getDeclaredConstructor().newInstance();

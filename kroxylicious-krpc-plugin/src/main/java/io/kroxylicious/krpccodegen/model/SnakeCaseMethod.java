@@ -6,6 +6,7 @@
 package io.kroxylicious.krpccodegen.model;
 
 import java.util.List;
+import java.util.Locale;
 
 import freemarker.template.TemplateMethodModelEx;
 import freemarker.template.TemplateModelException;
@@ -27,6 +28,6 @@ public class SnakeCaseMethod implements TemplateMethodModelEx {
     @SuppressWarnings("java:S3740")
     public Object exec(List arguments) throws TemplateModelException {
         String name = ((TemplateScalarModel) arguments.get(0)).getAsString();
-        return name.replaceAll("(?<=[a-z])([A-Z])", "_$1").toLowerCase();
+        return name.replaceAll("(?<=[a-z])([A-Z])", "_$1").toLowerCase(Locale.ROOT);
     }
 }

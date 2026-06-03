@@ -40,7 +40,7 @@ class AllDataClassesCompileTest {
         // message identifying the offending spec.
         List<String> allSpecNames = GeneratedCodecHarness.allSpecNames();
         for (String specName : allSpecNames) {
-            String dataClassName = dataClassNameFor(specName);
+            String dataClassName = GeneratedCodecHarness.dataClassNameFor(specName);
             if (!classes.containsKey(dataClassName)) {
                 String specContent = Files.readString(
                         GeneratedCodecHarness.specDirectory().resolve(specName + ".json"));
@@ -53,11 +53,4 @@ class AllDataClassesCompileTest {
         }
     }
 
-    /** Mirrors {@code MessageSpec.dataClassName()}: "Data" suffix only for Request/Response/Header specs. */
-    private static String dataClassNameFor(String specName) {
-        if (specName.endsWith("Request") || specName.endsWith("Response") || specName.endsWith("Header")) {
-            return specName + "Data";
-        }
-        return specName;
-    }
 }
