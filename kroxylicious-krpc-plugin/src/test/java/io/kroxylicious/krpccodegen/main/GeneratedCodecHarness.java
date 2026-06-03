@@ -86,7 +86,7 @@ class GeneratedCodecHarness {
         }
 
         Path tempDir = Files.createTempDirectory("krpc-all-");
-        generate("*{Request,Response}.json", tempDir.toFile());
+        generate("*.json", tempDir.toFile());
         compile(tempDir);
 
         URLClassLoader loader = new URLClassLoader(
@@ -120,12 +120,13 @@ class GeneratedCodecHarness {
     }
 
     /**
-     * Returns the names of all *Request.json and *Response.json message specs in the
-     * test message spec directory, without the ".json" suffix.
+     * Returns the names of all message spec JSON files in the test message spec directory,
+     * without the ".json" suffix.  This covers every spec type: *Request, *Response,
+     * *Header (framing wrappers), *Record / *Message (KRaft/metadata log formats), and
+     * ConsumerProtocol* (embedded binary payloads).
      */
-    static List<String> allRequestResponseSpecNames() throws URISyntaxException {
-        File[] files = specDirectory().toFile().listFiles(
-                f -> f.getName().endsWith("Request.json") || f.getName().endsWith("Response.json"));
+    static List<String> allSpecNames() throws URISyntaxException {
+        File[] files = specDirectory().toFile().listFiles(f -> f.getName().endsWith(".json"));
         if (files == null) {
             return Collections.emptyList();
         }
@@ -149,7 +150,7 @@ class GeneratedCodecHarness {
                 .withTemplateNames(List.of(TEMPLATE))
                 .withOutputPackage(TEST_PACKAGE)
                 .withOutputDir(outputDir)
-                .withOutputFilePattern("${messageSpecName}Data.java")
+                .withOutputFilePattern("${messageSpecDataClassName}.java")
                 .build();
         gen.generate();
     }

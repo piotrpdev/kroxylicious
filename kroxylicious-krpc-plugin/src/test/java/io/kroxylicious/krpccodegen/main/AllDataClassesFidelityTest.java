@@ -55,13 +55,16 @@ class AllDataClassesFidelityTest {
     }
 
     static Stream<String> allSpecNames() throws Exception {
-        return GeneratedCodecHarness.allRequestResponseSpecNames().stream();
+        return GeneratedCodecHarness.allSpecNames().stream();
     }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("allSpecNames")
     void roundTripFidelityWithDefaultInstance(String specName) throws Exception {
-        String dataClassName = specName + "Data";
+        // Request/Response/Header specs get a "Data" suffix (e.g. FetchRequestData);
+        // other spec types (records, markers, protocol payloads) keep the raw name
+        // (e.g. EndTxnMarker, VotersRecord) — matching Kafka's own dataClassName() rule.
+        String dataClassName = dataClassNameFor(specName);
         String realClassName = "org.apache.kafka.common.message." + dataClassName;
 
         Class<?> generatedClass = generatedClasses.get().get(dataClassName);
@@ -130,5 +133,17 @@ class AllDataClassesFidelityTest {
                     .as("%s round-trip identity at version %d", dataClassName, v)
                     .isEqualTo(realBytes);
         }
+    }
+
+    /**
+     * Returns the generated Data class name for a spec, applying the same rule as
+     * {@code MessageSpec.dataClassName()}: append "Data" only when the spec name ends
+     * with "Request", "Response", or "Header"; otherwise use the raw name.
+     */
+    private static String dataClassNameFor(String specName) {
+        if (specName.endsWith("Request") || specName.endsWith("Response") || specName.endsWith("Header")) {
+            return specName + "Data";
+        }
+        return specName;
     }
 }

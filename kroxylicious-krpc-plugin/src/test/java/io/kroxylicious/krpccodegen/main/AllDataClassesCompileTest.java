@@ -38,9 +38,10 @@ class AllDataClassesCompileTest {
         // them at all. KrpcGenerator skips those specs intentionally. Any other gap
         // is a code-generation bug and will cause this assertion to fail with a clear
         // message identifying the offending spec.
-        List<String> allSpecNames = GeneratedCodecHarness.allRequestResponseSpecNames();
+        List<String> allSpecNames = GeneratedCodecHarness.allSpecNames();
         for (String specName : allSpecNames) {
-            if (!classes.containsKey(specName + "Data")) {
+            String dataClassName = dataClassNameFor(specName);
+            if (!classes.containsKey(dataClassName)) {
                 String specContent = Files.readString(
                         GeneratedCodecHarness.specDirectory().resolve(specName + ".json"));
                 assertThat(specContent)
@@ -50,5 +51,13 @@ class AllDataClassesCompileTest {
                         .contains("\"validVersions\": \"none\"");
             }
         }
+    }
+
+    /** Mirrors {@code MessageSpec.dataClassName()}: "Data" suffix only for Request/Response/Header specs. */
+    private static String dataClassNameFor(String specName) {
+        if (specName.endsWith("Request") || specName.endsWith("Response") || specName.endsWith("Header")) {
+            return specName + "Data";
+        }
+        return specName;
     }
 }

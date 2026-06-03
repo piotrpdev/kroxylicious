@@ -1971,7 +1971,7 @@ ${indent}${field.name?uncap_first}.addSize(_size, _cache, _version);
 <#-- ============================================================
      Main output section starts here
      ============================================================ -->
-<#assign dataClass = "${inputSpec.name}Data">
+<#assign dataClass = inputSpec.dataClassName>
 <#assign validVersions = inputSpec.validVersions>
 <#assign effLo = validVersions.lowest>
 <#assign effHi = validVersions.highest>

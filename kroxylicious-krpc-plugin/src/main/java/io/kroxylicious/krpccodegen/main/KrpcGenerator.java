@@ -379,7 +379,10 @@ public class KrpcGenerator {
             try {
                 logger.log(Level.DEBUG, "Parsing template {0}", templateName);
                 var template = cfg.getTemplate(templateName);
-                var finalFileName = outputFile(outputFilePattern, target.name(), templateName);
+                var dataClassName = (target instanceof io.kroxylicious.krpccodegen.schema.MessageSpec ms)
+                        ? ms.dataClassName()
+                        : null;
+                var finalFileName = outputFile(outputFilePattern, target.name(), templateName, dataClassName);
                 if (shouldSkip(finalFileName)) {
                     return 0;
                 }
@@ -603,8 +606,16 @@ public class KrpcGenerator {
     }
 
     private String outputFile(String pattern, String messageSpecName, String templateName) {
+        return outputFile(pattern, messageSpecName, templateName, null);
+    }
+
+    private String outputFile(String pattern, String messageSpecName, String templateName,
+                              @Nullable String messageSpecDataClassName) {
         if (messageSpecName != null) {
             pattern = pattern.replace("${messageSpecName}", messageSpecName);
+        }
+        if (messageSpecDataClassName != null) {
+            pattern = pattern.replace("${messageSpecDataClassName}", messageSpecDataClassName);
         }
 
         if (templateName != null) {
