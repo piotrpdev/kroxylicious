@@ -58,11 +58,14 @@
 <#elseif field.type == 'records'>null
 <#elseif field.type == 'bytes'>
   <#if field.zeroCopy>
-    <#if field.nullableVersions?has_content && field.defaultString == 'null'>null<#else>ByteUtils.EMPTY_BUF</#if>
+    <#if field.nullableVersions?has_content>null<#else>ByteUtils.EMPTY_BUF</#if>
   <#else>
-    <#if field.nullableVersions?has_content && field.defaultString == 'null'>null<#else>Bytes.EMPTY</#if>
+    <#if field.nullableVersions?has_content>null<#else>Bytes.EMPTY</#if>
   </#if>
-<#elseif field.type == 'string'><#if field.defaultString == 'null'>null<#elseif field.defaultString == ''>""<#else>"${field.defaultString}"</#if>
+<#elseif field.type == 'string'>
+  <#if field.defaultString == 'null'>null
+  <#elseif field.defaultString == ''><#if field.nullableVersions?has_content>null<#else>""</#if>
+  <#else>"${field.defaultString}"</#if>
 <#elseif field.type.isStruct>new ${field.type}()
 <#elseif field.type.isStructArray>
   <#if structHasKeys(field)>new ${field.type.elementName}Collection(0)
@@ -381,8 +384,9 @@ ${indent}}
 </#macro>
 
 <#-- Read a records field -->
-<#macro readBytesField field indent flexLow>
+<#macro readBytesField field indent effFlex>
 <#local isNullable = field.nullableVersions?has_content>
+<#local fieldFlexLow = effFlex?has_content?then(effFlex.lowest, 32767)>
 ${indent}{
 ${indent}    int length;
 <#if field.zeroCopy>
@@ -393,7 +397,7 @@ ${indent}    } else {
 ${indent}        this.${field.name?uncap_first} = _readable.readByteBuffer(length);
 ${indent}    }
 <#else>
-${indent}    if (_version >= ${flexLow}) {
+${indent}    if (_version >= ${fieldFlexLow}) {
 ${indent}        length = _readable.readUnsignedVarint() - 1;
 ${indent}    } else {
 ${indent}        length = _readable.readInt();
@@ -515,6 +519,7 @@ ${indent}}
 <#local alwaysPresent = (field.versions.lowest <= effLo) && (field.versions.highest >= effHi)>
 <#local fromVersion = !alwaysPresent && (field.versions.lowest gt effLo) && (field.versions.highest gte effHi)>
 <#local throughVersion = !alwaysPresent && (field.versions.lowest <= effLo) && (field.versions.highest < effHi)>
+<#local isBounded = !alwaysPresent && !fromVersion && !throughVersion && field.versions.lowest gt effLo && field.versions.highest lt effHi>
 <#local effFlex = field.flexibleVersions.orElse(inputSpec.flexibleVersions)>
 <#if fromVersion>
         if (_version >= ${field.versions.lowest}) {
@@ -523,7 +528,7 @@ ${indent}}
 <#elseif field.type == 'records'>
 <@readRecordsField field=field indent="            " flexLow=flexLow/>
 <#elseif field.type == 'bytes'>
-<@readBytesField field=field indent="            " flexLow=flexLow/>
+<@readBytesField field=field indent="            " effFlex=effFlex/>
 <#elseif field.type.isArray>
 <@readArrayField field=field indent="            " effLo=effLo flexLow=flexLow/>
 <#elseif field.type.isStruct>
@@ -541,7 +546,26 @@ ${indent}}
 <#elseif field.type == 'records'>
 <@readRecordsField field=field indent="            " flexLow=flexLow/>
 <#elseif field.type == 'bytes'>
-<@readBytesField field=field indent="            " flexLow=flexLow/>
+<@readBytesField field=field indent="            " effFlex=effFlex/>
+<#elseif field.type.isArray>
+<@readArrayField field=field indent="            " effLo=effLo flexLow=flexLow/>
+<#elseif field.type.isStruct>
+            this.${field.name?uncap_first} = new ${field.type}(_readable, _version);
+<#else>
+            this.${field.name?uncap_first} = <@readPrimitive field=field/>;
+</#if>
+        } else {
+            this.${field.name?uncap_first} = <@fieldDefault field=field/>;
+        }
+<#elseif isBounded>
+<#-- field exists only in a bounded version range, e.g. versions "8-10" with effLo=0, effHi=13 -->
+        if (_version >= ${field.versions.lowest} && _version <= ${field.versions.highest}) {
+<#if field.type == 'string'>
+<@readStringField field=field indent="            " effFlex=effFlex/>
+<#elseif field.type == 'records'>
+<@readRecordsField field=field indent="            " flexLow=flexLow/>
+<#elseif field.type == 'bytes'>
+<@readBytesField field=field indent="            " effFlex=effFlex/>
 <#elseif field.type.isArray>
 <@readArrayField field=field indent="            " effLo=effLo flexLow=flexLow/>
 <#elseif field.type.isStruct>
@@ -561,7 +585,7 @@ ${indent}}
 <#elseif field.type == 'records'>
 <@readRecordsField field=field indent="        " flexLow=flexLow/>
 <#elseif field.type == 'bytes'>
-<@readBytesField field=field indent="        " flexLow=flexLow/>
+<@readBytesField field=field indent="        " effFlex=effFlex/>
 <#elseif field.type.isArray>
 <@readArrayField field=field indent="        " effLo=effLo flexLow=flexLow/>
 <#elseif field.type.isStruct>
@@ -763,6 +787,7 @@ this.${field.name?uncap_first} != null</#if>
 <#local alwaysPresent = (field.versions.lowest <= effLo) && (field.versions.highest >= effHi)>
 <#local fromVersion = !alwaysPresent && (field.versions.lowest gt effLo) && (field.versions.highest gte effHi)>
 <#local throughVersion = !alwaysPresent && (field.versions.lowest <= effLo) && (field.versions.highest < effHi)>
+<#local isBounded = !alwaysPresent && !fromVersion && !throughVersion && field.versions.lowest gt effLo && field.versions.highest lt effHi>
 <#local effFlex = field.flexibleVersions.orElse(inputSpec.flexibleVersions)>
 <#if alwaysPresent>
 <#-- Write without version guard -->
@@ -790,6 +815,15 @@ this.${field.name?uncap_first} != null</#if>
             }
         }
 </#if>
+<#elseif isBounded>
+<#-- field exists only in a bounded version range, e.g. versions "8-10" with effLo=0, effHi=13 -->
+        if (_version >= ${field.versions.lowest} && _version <= ${field.versions.highest}) {
+<@writeFieldDirect field=field effFlex=effFlex indent="            " effLo=effLo flexLow=flexLow/>
+        }<#if !field.ignorable> else {
+            if (<@nonDefaultCheck field=field/>) {
+                throw new UnsupportedVersionException("Attempted to write a non-default ${field.name?uncap_first} at version " + _version);
+            }
+        }</#if>
 </#if>
 </#if>
 </#list>
@@ -1120,6 +1154,8 @@ ${indent}for (${elemName} ${field.name?uncap_first}Element : ${field.name?uncap_
 <@writeArrayElem elemTypeName=elemTypeName elemVar="${field.name?uncap_first}Element" indent="${indent}    " fxLow=fxLow/>
 ${indent}}
 </#if>
+<#elseif field.type.isStruct>
+${indent}${field.name?uncap_first}.write(_writable, _cache, _version);
 </#if>
 </#macro>
 
@@ -1236,6 +1272,7 @@ ${indent}}
 <#local alwaysPresent = (field.versions.lowest <= effLo) && (field.versions.highest >= effHi)>
 <#local fromVersion = !alwaysPresent && (field.versions.lowest gt effLo) && (field.versions.highest gte effHi)>
 <#local throughVersion = !alwaysPresent && (field.versions.lowest <= effLo) && (field.versions.highest < effHi)>
+<#local isBounded = !alwaysPresent && !fromVersion && !throughVersion && field.versions.lowest gt effLo && field.versions.highest lt effHi>
 <#local effFlex = field.flexibleVersions.orElse(inputSpec.flexibleVersions)>
 <#local fxLow = effFlex?has_content?then(effFlex.lowest, 32767)>
 <#if fromVersion>
@@ -1244,6 +1281,10 @@ ${indent}}
         }
 <#elseif throughVersion>
         if (_version <= ${field.versions.highest}) {
+<@addSizeFieldDirect field=field fxLow=fxLow indent="            " flexLow=flexLow/>
+        }
+<#elseif isBounded>
+        if (_version >= ${field.versions.lowest} && _version <= ${field.versions.highest}) {
 <@addSizeFieldDirect field=field fxLow=fxLow indent="            " flexLow=flexLow/>
         }
 <#else>
@@ -1460,6 +1501,8 @@ ${indent}    for (${elemName} ${field.name?uncap_first}Element : ${field.name?un
 ${indent}    }
 ${indent}}
 </#if>
+<#elseif field.type.isStruct>
+${indent}${field.name?uncap_first}.addSize(_size, _cache, _version);
 </#if>
 </#macro>
 

@@ -2067,7 +2067,9 @@ highWatermark
             } else {
                 _size.addBytes(4);
             }
-            _size.addBytes(partitions.size() * 4);
+            for (Integer partitionsElement : partitions) {
+                _size.addBytes(4);
+            }
         }
         if (_unknownTaggedFields != null) {
             _numTaggedFields += _unknownTaggedFields.size();
