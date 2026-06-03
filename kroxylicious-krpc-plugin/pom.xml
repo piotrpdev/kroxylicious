@@ -96,7 +96,7 @@
         <!-- third party dependencies - test -->
         <dependency>
             <groupId>net.jqwik</groupId>
-            <artifactId>jqwik</artifactId>
+            <artifactId>jqwik-api</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

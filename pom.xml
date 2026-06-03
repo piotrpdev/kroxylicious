@@ -431,7 +431,7 @@
             </dependency>
             <dependency>
                 <groupId>net.jqwik</groupId>
-                <artifactId>jqwik</artifactId>
+                <artifactId>jqwik-api</artifactId>
                 <version>${jqwick.version}</version>
                 <scope>test</scope>
             </dependency>
