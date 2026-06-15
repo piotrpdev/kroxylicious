@@ -39,6 +39,7 @@ import io.kroxylicious.proxy.internal.filter.RecordConfig;
 import io.kroxylicious.proxy.internal.filter.SetterInjectionConfig;
 import io.kroxylicious.proxy.internal.tls.TlsTestConstants;
 import io.kroxylicious.proxy.plugin.UnknownPluginInstanceException;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 import io.kroxylicious.proxy.service.HostPort;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -841,7 +842,7 @@ class ConfigParserTest {
                 false,
                 Optional.empty(),
                 null,
-                null);
+                null, null);
 
         ConfigParser cp = new ConfigParser();
         assertThatThrownBy(() -> {
@@ -1097,6 +1098,54 @@ class ConfigParserTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .cause()
                 .hasMessageContaining("Missing external type id property 'type'");
+    }
+
+    @Test
+    void shouldParseSecurityFilePermissionsPolicy() {
+        // Given
+        var yaml = """
+                security:
+                  filePermissions:
+                    policy: STRICT
+                virtualClusters:
+                - name: demo
+                  targetCluster:
+                    bootstrapServers: localhost:9092
+                  gateways:
+                  - name: gw
+                    portIdentifiesNode:
+                      bootstrapAddress: "localhost:9192"
+                """;
+
+        // When
+        var config = configParser.parseConfiguration(yaml);
+
+        // Then
+        assertThat(config.security()).isNotNull();
+        assertThat(config.getEffectiveSecurity().getEffectiveFilePermissions().getEffectivePolicy())
+                .isEqualTo(Policy.STRICT);
+    }
+
+    @Test
+    void shouldDefaultSecurityToDisabledWhenAbsent() {
+        // Given
+        var yaml = """
+                virtualClusters:
+                - name: demo
+                  targetCluster:
+                    bootstrapServers: localhost:9092
+                  gateways:
+                  - name: gw
+                    portIdentifiesNode:
+                      bootstrapAddress: "localhost:9192"
+                """;
+
+        // When
+        var config = configParser.parseConfiguration(yaml);
+
+        // Then
+        assertThat(config.getEffectiveSecurity().getEffectiveFilePermissions().getEffectivePolicy())
+                .isEqualTo(Policy.DISABLED);
     }
 
     private record NonSerializableConfig(String id) {

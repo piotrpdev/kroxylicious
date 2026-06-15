@@ -53,6 +53,7 @@ import io.kroxylicious.proxy.internal.tls.NettyTrustProvider;
 import io.kroxylicious.proxy.internal.tls.SslContextBuildException;
 import io.kroxylicious.proxy.internal.util.StableKroxyliciousLinkGenerator;
 import io.kroxylicious.proxy.plugin.PluginConfigurationException;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 import io.kroxylicious.proxy.service.HostPort;
 import io.kroxylicious.proxy.service.NodeIdentificationStrategy;
 import io.kroxylicious.proxy.tag.VisibleForTesting;
@@ -107,6 +108,8 @@ public class VirtualClusterModel implements AutoCloseable {
 
     private final TlsCredentialSupplierManager tlsCredentialSupplierManager;
 
+    private final Policy filePermissionPolicy;
+
     /**
      * The filter chain factory for <em>this</em> virtual cluster. Owned by the VCM — its
      * lifetime is tied to this VCM's lifetime, closed when {@link #close()} is called by
@@ -143,6 +146,20 @@ public class VirtualClusterModel implements AutoCloseable {
                                @Nullable TransportSubjectBuilderConfig transportSubjectBuilderConfig,
                                Duration drainTimeout,
                                @Nullable PluginFactoryRegistry pluginFactoryRegistry) {
+        this(clusterName, targetCluster, logNetwork, logFrames, filters, topicNameCacheConfig, transportSubjectBuilderConfig, drainTimeout, pluginFactoryRegistry,
+                Policy.DISABLED);
+    }
+
+    public VirtualClusterModel(String clusterName,
+                               TargetCluster targetCluster,
+                               boolean logNetwork,
+                               boolean logFrames,
+                               List<NamedFilterDefinition> filters,
+                               CacheConfiguration topicNameCacheConfig,
+                               @Nullable TransportSubjectBuilderConfig transportSubjectBuilderConfig,
+                               Duration drainTimeout,
+                               @Nullable PluginFactoryRegistry pluginFactoryRegistry,
+                               Policy filePermissionPolicy) {
         this.clusterName = Objects.requireNonNull(clusterName);
         this.targetCluster = Objects.requireNonNull(targetCluster);
         this.logNetwork = logNetwork;
@@ -167,6 +184,9 @@ public class VirtualClusterModel implements AutoCloseable {
             // PluginFactoryRegistry.
             this.filterChainFactory = new FilterChainFactory(null, List.of());
         }
+
+        // DISABLED for backwards compatibility - maybe change this in 1.0 release?
+        this.filePermissionPolicy = filePermissionPolicy != null ? filePermissionPolicy : Policy.DISABLED;
 
         // TODO: https://github.com/kroxylicious/kroxylicious/issues/104 be prepared to reload the SslContext at runtime.
         this.upstreamSslContext = buildUpstreamSslContext();
@@ -323,6 +343,10 @@ public class VirtualClusterModel implements AutoCloseable {
     }
 
     public static NettyTrustProvider configureTrustProvider(Tls tlsConfiguration) {
+    public Policy getFilePermissionPolicy() {
+        return filePermissionPolicy;
+    }
+
         final TrustProvider trustProvider = Optional.ofNullable(tlsConfiguration.trust()).orElse(PlatformTrustProvider.INSTANCE);
         return new NettyTrustProvider(trustProvider);
     }

@@ -25,6 +25,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import io.kroxylicious.proxy.config.admin.ManagementConfiguration;
 import io.kroxylicious.proxy.model.VirtualClusterModel;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 
 import edu.umd.cs.findbugs.annotations.Nullable;
 
@@ -41,8 +42,10 @@ import edu.umd.cs.findbugs.annotations.Nullable;
  * @param development Development options
  * @param network Controls aspects of network configuration for the proxy.
  * @param proxyProtocol PROXY protocol configuration.
+ * @param security Security configuration including file permission validation.
  */
-@JsonPropertyOrder({ "management", "filterDefinitions", "defaultFilters", "virtualClusters", "micrometer", "useIoUring", "development", "network", "proxyProtocol" })
+@JsonPropertyOrder({ "management", "filterDefinitions", "defaultFilters", "virtualClusters", "micrometer", "useIoUring", "development", "network", "proxyProtocol",
+        "security" })
 public record Configuration(
                             @Nullable ManagementConfiguration management,
                             @Nullable List<NamedFilterDefinition> filterDefinitions,
@@ -52,7 +55,8 @@ public record Configuration(
                             boolean useIoUring,
                             Optional<Map<String, Object>> development,
                             @Nullable NetworkDefinition network,
-                            @Nullable ProxyProtocolConfig proxyProtocol) {
+                            @Nullable ProxyProtocolConfig proxyProtocol,
+                            @Nullable SecurityConfig security) {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Configuration.class);
 
@@ -134,7 +138,8 @@ public record Configuration(
 
     private static VirtualClusterModel toVirtualClusterModel(VirtualCluster virtualCluster,
                                                              List<NamedFilterDefinition> filterDefinitions,
-                                                             PluginFactoryRegistry pfr) {
+                                                             PluginFactoryRegistry pfr,
+                                                             Policy filePermissionPolicy) {
 
         VirtualClusterModel virtualClusterModel = new VirtualClusterModel(virtualCluster.name(),
                 virtualCluster.targetCluster(),
@@ -144,7 +149,8 @@ public record Configuration(
                 virtualCluster.topicNameCacheConfig(),
                 virtualCluster.subjectBuilder(),
                 virtualCluster.effectiveDrainTimeout(),
-                pfr);
+                pfr,
+                filePermissionPolicy);
 
         addGateways(virtualCluster.gateways(), virtualClusterModel);
         virtualClusterModel.logVirtualClusterSummary();
@@ -179,10 +185,21 @@ public record Configuration(
         return proxyProtocol != null ? proxyProtocol.mode() : ProxyProtocolMode.DISABLED;
     }
 
+    /**
+     * Gets the effective security configuration.
+     *
+     * @return the security config, never null
+     */
+    public SecurityConfig getEffectiveSecurity() {
+        return security != null ? security : SecurityConfig.DEFAULT;
+    }
+
     public List<VirtualClusterModel> virtualClusterModel(PluginFactoryRegistry pfr) {
         var filterDefinitionsByName = Optional.ofNullable(this.filterDefinitions()).orElse(List.of())
                 .stream()
                 .collect(Collectors.toMap(NamedFilterDefinition::name, Function.identity()));
+
+        Policy policy = getEffectiveSecurity().getEffectiveFilePermissions().getEffectivePolicy();
 
         return virtualClusters.stream()
                 .map(virtualCluster -> {

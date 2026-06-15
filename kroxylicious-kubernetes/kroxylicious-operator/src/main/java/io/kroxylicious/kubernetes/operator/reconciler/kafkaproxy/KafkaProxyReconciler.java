@@ -84,6 +84,7 @@ import io.kroxylicious.proxy.config.Configuration;
 import io.kroxylicious.proxy.config.NamedFilterDefinition;
 import io.kroxylicious.proxy.config.NodeIdentificationStrategyFactory;
 import io.kroxylicious.proxy.config.PortIdentifiesNodeIdentificationStrategy;
+import io.kroxylicious.proxy.config.SecurityConfig;
 import io.kroxylicious.proxy.config.SniHostIdentifiesNodeIdentificationStrategy;
 import io.kroxylicious.proxy.config.TargetCluster;
 import io.kroxylicious.proxy.config.VirtualCluster;
@@ -99,6 +100,8 @@ import io.kroxylicious.proxy.config.tls.Tls;
 import io.kroxylicious.proxy.config.tls.TlsClientAuth;
 import io.kroxylicious.proxy.config.tls.TrustProvider;
 import io.kroxylicious.proxy.config.tls.TrustStore;
+import io.kroxylicious.proxy.security.FilePermissionConfig;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 
 import edu.umd.cs.findbugs.annotations.Nullable;
 
@@ -225,7 +228,8 @@ public class KafkaProxyReconciler implements
                         // micrometer
                         Optional.empty(),
                         NetworkDefinitionBuilder.build(proxy),
-                        null),
+                        null,
+                        new SecurityConfig(new FilePermissionConfig(Policy.RELAXED))),
                 allVolumes,
                 allMounts);
     }
