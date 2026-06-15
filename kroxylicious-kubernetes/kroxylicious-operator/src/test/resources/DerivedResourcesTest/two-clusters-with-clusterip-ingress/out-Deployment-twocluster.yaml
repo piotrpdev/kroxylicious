@@ -83,6 +83,8 @@ spec:
               name: "config-volume"
               subPath: "proxy-config.yaml"
       securityContext:
+        fsGroup: 185
+        runAsGroup: 185
         runAsNonRoot: true
         seccompProfile:
           type: "RuntimeDefault"

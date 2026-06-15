@@ -46,3 +46,6 @@ data:
           protocols:
             allowed:
             - "TLS1.3"
+    security:
+      filePermissions:
+        policy: "RELAXED"

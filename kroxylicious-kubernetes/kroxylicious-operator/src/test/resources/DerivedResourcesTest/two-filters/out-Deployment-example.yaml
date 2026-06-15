@@ -86,6 +86,8 @@ spec:
               name: "secrets-my-secret"
               readOnly: true
       securityContext:
+        fsGroup: 185
+        runAsGroup: 185
         runAsNonRoot: true
         seccompProfile:
           type: "RuntimeDefault"
@@ -95,4 +97,5 @@ spec:
           name: "config-volume"
         - name: "secrets-my-secret"
           secret:
+            defaultMode: 288
             secretName: "my-secret"

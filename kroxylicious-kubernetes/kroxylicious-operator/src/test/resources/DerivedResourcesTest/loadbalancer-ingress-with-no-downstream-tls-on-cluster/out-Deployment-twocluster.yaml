@@ -80,6 +80,8 @@ spec:
               name: "secrets-downstream-tls-cert"
               readOnly: true
       securityContext:
+        fsGroup: 185
+        runAsGroup: 185
         runAsNonRoot: true
         seccompProfile:
           type: "RuntimeDefault"
@@ -89,4 +91,5 @@ spec:
           name: "config-volume"
         - name: "secrets-downstream-tls-cert"
           secret:
+            defaultMode: 288
             secretName: "downstream-tls-cert"
