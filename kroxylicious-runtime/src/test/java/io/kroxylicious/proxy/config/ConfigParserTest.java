@@ -40,6 +40,7 @@ import io.kroxylicious.proxy.internal.filter.RecordConfig;
 import io.kroxylicious.proxy.internal.filter.SetterInjectionConfig;
 import io.kroxylicious.proxy.internal.tls.TlsTestConstants;
 import io.kroxylicious.proxy.plugin.UnknownPluginInstanceException;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 import io.kroxylicious.proxy.service.HostPort;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -965,7 +966,7 @@ class ConfigParserTest {
         var gateway = new VirtualClusterGateway("gw", new PortIdentifiesNodeIdentificationStrategy(HostPort.parse("localhost:9082"), null, null, null), null,
                 Optional.empty());
         var config = new Configuration(null, null, List.of(new NamedFilterDefinition("foo", "", new NonSerializableConfig(""))), List.of("foo"), null,
-                List.of(new VirtualCluster("demo", targetCluster, List.of(gateway), false, false, List.of())), null, false, Optional.empty(), null, null);
+                List.of(new VirtualCluster("demo", targetCluster, List.of(gateway), false, false, List.of())), null, false, Optional.empty(), null, null, null);
 
         ConfigParser cp = new ConfigParser();
         assertThatThrownBy(() -> {
@@ -1228,6 +1229,54 @@ class ConfigParserTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .cause()
                 .hasMessageContaining("Missing external type id property 'type'");
+    }
+
+    @Test
+    void shouldParseSecurityFilePermissionsPolicy() {
+        // Given
+        var yaml = """
+                security:
+                  filePermissions:
+                    policy: STRICT
+                virtualClusters:
+                - name: demo
+                  targetCluster:
+                    bootstrapServers: localhost:9092
+                  gateways:
+                  - name: gw
+                    portIdentifiesNode:
+                      bootstrapAddress: "localhost:9192"
+                """;
+
+        // When
+        var config = configParser.parseConfiguration(yaml);
+
+        // Then
+        assertThat(config.security()).isNotNull();
+        assertThat(config.getEffectiveSecurity().getEffectiveFilePermissions().getEffectivePolicy())
+                .isEqualTo(Policy.STRICT);
+    }
+
+    @Test
+    void shouldDefaultSecurityToDisabledWhenAbsent() {
+        // Given
+        var yaml = """
+                virtualClusters:
+                - name: demo
+                  targetCluster:
+                    bootstrapServers: localhost:9092
+                  gateways:
+                  - name: gw
+                    portIdentifiesNode:
+                      bootstrapAddress: "localhost:9192"
+                """;
+
+        // When
+        var config = configParser.parseConfiguration(yaml);
+
+        // Then
+        assertThat(config.getEffectiveSecurity().getEffectiveFilePermissions().getEffectivePolicy())
+                .isEqualTo(Policy.DISABLED);
     }
 
     private record NonSerializableConfig(String id) {

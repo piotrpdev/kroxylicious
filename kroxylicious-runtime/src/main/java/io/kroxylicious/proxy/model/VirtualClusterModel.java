@@ -62,6 +62,7 @@ import io.kroxylicious.proxy.internal.tls.SslContextBuildException;
 import io.kroxylicious.proxy.internal.util.StableKroxyliciousLinkGenerator;
 import io.kroxylicious.proxy.plugin.PluginConfigurationException;
 import io.kroxylicious.proxy.router.Router;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 import io.kroxylicious.proxy.service.HostPort;
 import io.kroxylicious.proxy.service.NodeIdentificationStrategy;
 import io.kroxylicious.proxy.tag.VisibleForTesting;
@@ -116,6 +117,8 @@ public class VirtualClusterModel implements AutoCloseable {
     @Nullable
     private TopicNameCacheFilter topicNameCacheFilter = null;
 
+    private final Policy filePermissionPolicy;
+
     /**
      * The filter chain factory for <em>this</em> virtual cluster. Owned by the VCM — its
      * lifetime is tied to this VCM's lifetime, closed when {@link #close()} is called by
@@ -143,6 +146,22 @@ public class VirtualClusterModel implements AutoCloseable {
                                @Nullable TransportSubjectBuilderConfig transportSubjectBuilderConfig,
                                Duration drainTimeout,
                                @Nullable PluginFactoryRegistry pluginFactoryRegistry) {
+        // Policy.DISABLED used for backwards compatibility until change in future release
+        this(clusterName, routing, logNetwork, logFrames, filters, topicNameCacheConfig,
+                transportSubjectBuilderConfig, drainTimeout, pluginFactoryRegistry, Policy.DISABLED);
+    }
+
+    @SuppressWarnings("java:S107")
+    public VirtualClusterModel(String clusterName,
+                               RoutingModel routing,
+                               boolean logNetwork,
+                               boolean logFrames,
+                               List<NamedFilterDefinition> filters,
+                               CacheConfiguration topicNameCacheConfig,
+                               @Nullable TransportSubjectBuilderConfig transportSubjectBuilderConfig,
+                               Duration drainTimeout,
+                               @Nullable PluginFactoryRegistry pluginFactoryRegistry,
+                               Policy filePermissionPolicy) {
         this.clusterName = Objects.requireNonNull(clusterName);
         this.logNetwork = logNetwork;
         this.logFrames = logFrames;
@@ -154,6 +173,7 @@ public class VirtualClusterModel implements AutoCloseable {
         this.filterChainFactory = pluginFactoryRegistry != null
                 ? new FilterChainFactory(pluginFactoryRegistry, filters)
                 : FilterChainFactory.empty();
+        this.filePermissionPolicy = filePermissionPolicy;
     }
 
     /**
@@ -305,9 +325,13 @@ public class VirtualClusterModel implements AutoCloseable {
         return routing instanceof DirectRouting dr && dr.upstreamCluster().usesDynamicTlsCredentials();
     }
 
-    public static NettyTrustProvider configureTrustProvider(Tls tlsConfiguration) {
+    public Policy getFilePermissionPolicy() {
+        return filePermissionPolicy;
+    }
+
+    public static NettyTrustProvider configureTrustProvider(Tls tlsConfiguration, Policy policy) {
         final TrustProvider trustProvider = Optional.ofNullable(tlsConfiguration.trust()).orElse(PlatformTrustProvider.INSTANCE);
-        return new NettyTrustProvider(trustProvider);
+        return new NettyTrustProvider(trustProvider, policy);
     }
 
     public static void configureCipherSuites(SslContextBuilder sslContextBuilder, Tls tlsConfiguration) {
@@ -590,13 +614,15 @@ public class VirtualClusterModel implements AutoCloseable {
                                             StableKroxyliciousLinkGenerator.INSTANCE.errorLink(StableKroxyliciousLinkGenerator.CLIENT_TLS)));
                 }
                 try {
-                    var sslContextBuilder = Optional.of(tlsConfiguration.key()).map(NettyKeyProvider::new).map(NettyKeyProvider::forServer)
+                    var sslContextBuilder = Optional.of(tlsConfiguration.key())
+                            .map(key -> new NettyKeyProvider(key, virtualCluster.filePermissionPolicy))
+                            .map(NettyKeyProvider::forServer)
                             .orElseThrow();
 
                     configureCipherSuites(sslContextBuilder, tlsConfiguration);
                     configureEnabledProtocols(sslContextBuilder, tlsConfiguration);
 
-                    return configureTrustProvider(tlsConfiguration).apply(sslContextBuilder).build();
+                    return configureTrustProvider(tlsConfiguration, virtualCluster.filePermissionPolicy).apply(sslContextBuilder).build();
                 }
                 catch (SSLException e) {
                     throw new UncheckedIOException(e);
