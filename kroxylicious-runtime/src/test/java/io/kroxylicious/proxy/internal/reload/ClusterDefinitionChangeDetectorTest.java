@@ -208,18 +208,18 @@ class ClusterDefinitionChangeDetectorTest {
 
     private static Configuration config(List<ClusterDefinition> clusterDefs, VirtualCluster... clusters) {
         return new Configuration(null, clusterDefs, null, null, null, List.of(clusters), null, false,
-                Optional.empty(), null, null);
+                Optional.empty(), null, null, null);
     }
 
     private static Configuration configWithRouter(List<ClusterDefinition> clusterDefs,
                                                   List<RouterDefinition> routerDefs,
                                                   VirtualCluster... clusters) {
         return new Configuration(null, clusterDefs, null, null, routerDefs, List.of(clusters), null, false,
-                Optional.empty(), null, null);
+                Optional.empty(), null, null, null);
     }
 
     private static Configuration configWithNoClusterDefs(VirtualCluster... clusters) {
         return new Configuration(null, null, null, null, null, List.of(clusters), null, false,
-                Optional.empty(), null, null);
+                Optional.empty(), null, null, null);
     }
 }

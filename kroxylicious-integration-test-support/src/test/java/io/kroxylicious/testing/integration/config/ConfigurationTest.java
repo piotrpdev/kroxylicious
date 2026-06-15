@@ -603,7 +603,7 @@ class ConfigurationTest {
                 false,
                 development,
                 null,
-                null))
+                null, null))
                 .isInstanceOf(IllegalConfigurationException.class)
                 .hasMessage("'filterDefinitions' contains multiple items with the same names: [foo]");
     }
@@ -624,7 +624,7 @@ class ConfigurationTest {
                 false,
                 development,
                 null,
-                null))
+                null, null))
                 .isInstanceOf(IllegalConfigurationException.class)
                 .hasMessage("'defaultFilters' references filters not defined in 'filterDefinitions': [missing]");
     }
@@ -648,7 +648,7 @@ class ConfigurationTest {
                 false,
                 development,
                 null,
-                null))
+                null, null))
                 .isInstanceOf(IllegalConfigurationException.class)
                 .hasMessage("'virtualClusters.vc1.filters' references filters not defined in 'filterDefinitions': [missing]");
     }
@@ -677,7 +677,7 @@ class ConfigurationTest {
                 false,
                 development,
                 null,
-                null))
+                null, null))
                 .isInstanceOf(IllegalConfigurationException.class)
                 .hasMessage(
                         "'filterDefinitions' defines filters which are not used in 'defaultFilters', in any virtual cluster's 'filters', or in any route's 'filters': [unused]");
@@ -704,7 +704,7 @@ class ConfigurationTest {
                 false,
                 Optional.empty(),
                 null,
-                null);
+                null, null);
 
         // When
         var model = configuration.virtualClusterModel(null);
@@ -723,7 +723,7 @@ class ConfigurationTest {
         Configuration configuration = new Configuration(null, null, null, null, null,
                 List.of(buildVirtualCluster("vc", "x:9092", null)),
                 null, false, Optional.empty(), null,
-                new ProxyProtocolConfig(ProxyProtocolMode.REQUIRED));
+                new ProxyProtocolConfig(ProxyProtocolMode.REQUIRED), null);
         assertThat(configuration.proxyProtocolMode()).isEqualTo(ProxyProtocolMode.REQUIRED);
     }
 
@@ -732,7 +732,7 @@ class ConfigurationTest {
         Configuration configuration = new Configuration(null, null, null, null, null,
                 List.of(buildVirtualCluster("vc", "x:9092", null)),
                 null, false, Optional.empty(), null,
-                new ProxyProtocolConfig(ProxyProtocolMode.ALLOWED));
+                new ProxyProtocolConfig(ProxyProtocolMode.ALLOWED), null);
         assertThat(configuration.proxyProtocolMode()).isEqualTo(ProxyProtocolMode.ALLOWED);
     }
 
@@ -741,7 +741,7 @@ class ConfigurationTest {
         Configuration configuration = new Configuration(null, null, null, null, null,
                 List.of(buildVirtualCluster("vc", "x:9092", null)),
                 null, false, Optional.empty(), null,
-                new ProxyProtocolConfig(ProxyProtocolMode.DISABLED));
+                new ProxyProtocolConfig(ProxyProtocolMode.DISABLED), null);
         assertThat(configuration.proxyProtocolMode()).isEqualTo(ProxyProtocolMode.DISABLED);
     }
 
@@ -750,7 +750,7 @@ class ConfigurationTest {
         Configuration configuration = new Configuration(null, null, null, null, null,
                 List.of(buildVirtualCluster("vc", "x:9092", null)),
                 null, false, Optional.empty(), null,
-                null);
+                null, null);
         assertThat(configuration.proxyProtocolMode()).isEqualTo(ProxyProtocolMode.DISABLED);
     }
 
@@ -776,6 +776,7 @@ class ConfigurationTest {
                 null,
                 false,
                 Optional.empty(),
+                null,
                 null,
                 null))
                 .isInstanceOf(IllegalConfigurationException.class)

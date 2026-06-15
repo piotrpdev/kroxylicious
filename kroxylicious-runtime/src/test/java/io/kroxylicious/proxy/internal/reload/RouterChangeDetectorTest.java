@@ -185,12 +185,12 @@ class RouterChangeDetectorTest {
 
     private static Configuration configWith(@Nullable List<RouterDefinition> routerDefs, VirtualCluster... clusters) {
         return new Configuration(null, List.of(UPSTREAM), null, null, routerDefs, List.of(clusters), null, false,
-                Optional.empty(), null, null);
+                Optional.empty(), null, null, null);
     }
 
     private static Configuration configWithNoRouters(VirtualCluster... clusters) {
         return new Configuration(null, null, null, null, null, List.of(clusters), null, false,
-                Optional.empty(), null, null);
+                Optional.empty(), null, null, null);
     }
 
 }
