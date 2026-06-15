@@ -50,7 +50,7 @@ class StaticSectionDifferTest {
         var newConfig = new Configuration(oldConfig.management(), oldConfig.filterDefinitions(),
                 oldConfig.defaultFilters(), oldConfig.virtualClusters(), oldConfig.micrometer(),
                 !oldConfig.useIoUring(), // toggled
-                oldConfig.development(), oldConfig.network(), oldConfig.proxyProtocol());
+                oldConfig.development(), oldConfig.network(), oldConfig.proxyProtocol(), null);
         assertThat(differ.diff(oldConfig, newConfig)).containsExactly("useIoUring");
     }
 
@@ -67,7 +67,7 @@ class StaticSectionDifferTest {
         var newConfig = new Configuration(oldConfig.management(), oldConfig.filterDefinitions(),
                 oldConfig.defaultFilters(), oldConfig.virtualClusters(),
                 List.of(new MicrometerDefinition("SomeMicrometerType", null)), // different from base's null
-                oldConfig.useIoUring(), oldConfig.development(), oldConfig.network(), oldConfig.proxyProtocol());
+                oldConfig.useIoUring(), oldConfig.development(), oldConfig.network(), oldConfig.proxyProtocol(), null);
         assertThat(differ.diff(oldConfig, newConfig)).containsExactly("micrometer");
     }
 
@@ -85,7 +85,7 @@ class StaticSectionDifferTest {
                 oldConfig.defaultFilters(), oldConfig.virtualClusters(), oldConfig.micrometer(),
                 oldConfig.useIoUring(),
                 Optional.of(Map.of("debug", "true")), // different from base's Optional.empty()
-                oldConfig.network(), oldConfig.proxyProtocol());
+                oldConfig.network(), oldConfig.proxyProtocol(), null);
         assertThat(differ.diff(oldConfig, newConfig)).containsExactly("development");
     }
 
@@ -101,7 +101,7 @@ class StaticSectionDifferTest {
                 !oldConfig.useIoUring(), // changed: useIoUring
                 oldConfig.development(),
                 oldConfig.network(),
-                new ProxyProtocolConfig(ProxyProtocolMode.REQUIRED)); // changed: proxyProtocol
+                new ProxyProtocolConfig(ProxyProtocolMode.REQUIRED), null); // changed: proxyProtocol
         assertThat(differ.diff(oldConfig, newConfig))
                 .containsExactlyInAnyOrder("management", "useIoUring", "proxyProtocol");
     }
@@ -120,7 +120,7 @@ class StaticSectionDifferTest {
                 oldConfig.useIoUring(),
                 oldConfig.development(),
                 oldConfig.network(),
-                oldConfig.proxyProtocol());
+                oldConfig.proxyProtocol(), null);
         assertThat(differ.diff(oldConfig, newConfig)).isEmpty();
     }
 
@@ -154,25 +154,25 @@ class StaticSectionDifferTest {
     private static Configuration baseConfig() {
         return new Configuration(null, null, null,
                 List.of(vc("base-cluster")), null,
-                false, Optional.empty(), null, null);
+                false, Optional.empty(), null, null, null);
     }
 
     private static Configuration withManagement(Configuration base, ManagementConfiguration management) {
         return new Configuration(management, base.filterDefinitions(), base.defaultFilters(),
                 base.virtualClusters(), base.micrometer(),
-                base.useIoUring(), base.development(), base.network(), base.proxyProtocol());
+                base.useIoUring(), base.development(), base.network(), base.proxyProtocol(), null);
     }
 
     private static Configuration withNetwork(Configuration base, NetworkDefinition network) {
         return new Configuration(base.management(), base.filterDefinitions(), base.defaultFilters(),
                 base.virtualClusters(), base.micrometer(),
-                base.useIoUring(), base.development(), network, base.proxyProtocol());
+                base.useIoUring(), base.development(), network, base.proxyProtocol(), null);
     }
 
     private static Configuration withProxyProtocol(Configuration base, ProxyProtocolConfig proxyProtocol) {
         return new Configuration(base.management(), base.filterDefinitions(), base.defaultFilters(),
                 base.virtualClusters(), base.micrometer(),
-                base.useIoUring(), base.development(), base.network(), proxyProtocol);
+                base.useIoUring(), base.development(), base.network(), proxyProtocol, null);
     }
 
     private static VirtualCluster vc(String name) {

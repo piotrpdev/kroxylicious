@@ -107,7 +107,7 @@ class OperatorAssertionsTest {
                 false,
                 Optional.empty(),
                 null,
-                null);
+                null, null);
 
         // When
         Assert<?, ?> actualAssertion = OperatorAssertions.assertThat(configurations);

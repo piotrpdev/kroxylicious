@@ -174,7 +174,7 @@ class FilterChangeDetectorTest {
                                             @Nullable List<String> defaultFilters,
                                             VirtualCluster... clusters) {
         return new Configuration(null, filterDefs, defaultFilters, List.of(clusters), null, false,
-                Optional.empty(), null, null);
+                Optional.empty(), null, null, null);
     }
 
     private static NamedFilterDefinition filterDef(String name, String opaqueConfig) {

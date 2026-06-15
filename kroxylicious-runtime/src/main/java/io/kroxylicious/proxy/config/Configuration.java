@@ -204,7 +204,7 @@ public record Configuration(
         return virtualClusters.stream()
                 .map(virtualCluster -> {
                     List<NamedFilterDefinition> filterDefinitions = namedFilterDefinitionsForCluster(filterDefinitionsByName, virtualCluster);
-                    return toVirtualClusterModel(virtualCluster, filterDefinitions, pfr);
+                    return toVirtualClusterModel(virtualCluster, filterDefinitions, pfr, policy);
                 })
                 .toList();
     }

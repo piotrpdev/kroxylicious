@@ -224,7 +224,7 @@ class OperationsPlannerTest {
     private static Configuration configWith(String... clusterNames) {
         var clusters = Arrays.stream(clusterNames).map(OperationsPlannerTest::vc).toList();
         return new Configuration(null, null, null, clusters, null, false,
-                Optional.empty(), null, null);
+                Optional.empty(), null, null, null);
     }
 
     private static VirtualCluster vc(String name) {

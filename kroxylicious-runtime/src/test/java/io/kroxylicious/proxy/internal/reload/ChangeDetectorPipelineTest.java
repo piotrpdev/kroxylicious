@@ -52,9 +52,9 @@ class ChangeDetectorPipelineTest {
                 List.of(gateway("default", 9999)), // port changed
                 false, false, List.of("filter-a"));
         var oldConfig = new Configuration(null, List.of(oldFilter), null,
-                List.of(oldVc), null, false, Optional.empty(), null, null);
+                List.of(oldVc), null, false, Optional.empty(), null, null, null);
         var newConfig = new Configuration(null, List.of(newFilter), null,
-                List.of(newVc), null, false, Optional.empty(), null, null);
+                List.of(newVc), null, false, Optional.empty(), null, null, null);
         var context = new ConfigurationChangeContext(oldConfig, newConfig);
 
         // Both detectors independently flag the cluster
@@ -83,9 +83,9 @@ class ChangeDetectorPipelineTest {
         var existing = vc("existing", List.of("filter-a"));
         var newlyAdded = vc("newly-added", List.of("filter-a"));
         var oldConfig = new Configuration(null, List.of(oldFilter), null,
-                List.of(existing), null, false, Optional.empty(), null, null);
+                List.of(existing), null, false, Optional.empty(), null, null, null);
         var newConfig = new Configuration(null, List.of(newFilter), null,
-                List.of(existing, newlyAdded), null, false, Optional.empty(), null, null);
+                List.of(existing, newlyAdded), null, false, Optional.empty(), null, null, null);
         var context = new ConfigurationChangeContext(oldConfig, newConfig);
 
         var vccResult = vccDetector.detect(context);
@@ -113,9 +113,9 @@ class ChangeDetectorPipelineTest {
         var goingAway = vc("going-away", List.of("filter-a"));
         var staying = vcWithoutFilters("staying");
         var oldConfig = new Configuration(null, List.of(oldFilter), null,
-                List.of(goingAway, staying), null, false, Optional.empty(), null, null);
+                List.of(goingAway, staying), null, false, Optional.empty(), null, null, null);
         var newConfig = new Configuration(null, null, null,
-                List.of(staying), null, false, Optional.empty(), null, null);
+                List.of(staying), null, false, Optional.empty(), null, null, null);
         var context = new ConfigurationChangeContext(oldConfig, newConfig);
 
         var vccResult = vccDetector.detect(context);
@@ -154,10 +154,10 @@ class ChangeDetectorPipelineTest {
 
         var oldConfig = new Configuration(null, List.of(oldFilter), null,
                 List.of(keepUnchanged, removedCluster, oldGatewayChanged, filterChangedCluster),
-                null, false, Optional.empty(), null, null);
+                null, false, Optional.empty(), null, null, null);
         var newConfig = new Configuration(null, List.of(newFilter), null,
                 List.of(keepUnchanged, newGatewayChanged, filterChangedCluster, addedCluster),
-                null, false, Optional.empty(), null, null);
+                null, false, Optional.empty(), null, null, null);
         var context = new ConfigurationChangeContext(oldConfig, newConfig);
 
         var merged = vccDetector.detect(context).merge(filterDetector.detect(context));
@@ -175,7 +175,7 @@ class ChangeDetectorPipelineTest {
         var filter = new NamedFilterDefinition("filter-a", "io.kroxylicious.test.FakeFilter", "v1");
         var cluster = vc("cluster", List.of("filter-a"));
         var config = new Configuration(null, List.of(filter), null,
-                List.of(cluster), null, false, Optional.empty(), null, null);
+                List.of(cluster), null, false, Optional.empty(), null, null, null);
         var context = new ConfigurationChangeContext(config, config);
 
         var vccResult = vccDetector.detect(context);
@@ -204,9 +204,9 @@ class ChangeDetectorPipelineTest {
         var filterChangedCluster = vc("filter-changed", List.of("filter-x"));
 
         var oldConfig = new Configuration(null, List.of(oldFilter), null,
-                List.of(oldGatewayChanged, filterChangedCluster), null, false, Optional.empty(), null, null);
+                List.of(oldGatewayChanged, filterChangedCluster), null, false, Optional.empty(), null, null, null);
         var newConfig = new Configuration(null, List.of(newFilter), null,
-                List.of(newGatewayChanged, filterChangedCluster), null, false, Optional.empty(), null, null);
+                List.of(newGatewayChanged, filterChangedCluster), null, false, Optional.empty(), null, null, null);
         var context = new ConfigurationChangeContext(oldConfig, newConfig);
 
         var vccResult = vccDetector.detect(context);
