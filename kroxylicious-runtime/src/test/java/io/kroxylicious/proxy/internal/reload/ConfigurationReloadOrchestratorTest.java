@@ -819,7 +819,7 @@ class ConfigurationReloadOrchestratorTest {
     }
 
     private static Configuration configWith(VirtualCluster... clusters) {
-        return new Configuration(null, null, null, null, null, List.of(clusters), null, false, Optional.empty(), null, null);
+        return new Configuration(null, null, null, null, null, List.of(clusters), null, false, Optional.empty(), null, null, null);
     }
 
     private static Configuration withDifferentUseIoUring(Configuration base) {
@@ -828,7 +828,7 @@ class ConfigurationReloadOrchestratorTest {
                 !base.useIoUring(),
                 base.development(), base.network(),
                 // also vary proxyProtocol just to make the diff non-empty even if useIoUring matches
-                new ProxyProtocolConfig(ProxyProtocolMode.REQUIRED));
+                new ProxyProtocolConfig(ProxyProtocolMode.REQUIRED), null);
     }
 
     private static VirtualCluster vc(String name) {

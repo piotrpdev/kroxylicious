@@ -42,7 +42,7 @@ class ConfigurationValidationTest {
     }
 
     private static Configuration config(List<VirtualCluster> vcs) {
-        return new Configuration(null, null, null, null, null, vcs, null, false, Optional.empty(), null, null);
+        return new Configuration(null, null, null, null, null, vcs, null, false, Optional.empty(), null, null, null);
     }
 
     @SuppressWarnings({ "rawtypes", "unchecked" })
@@ -87,7 +87,7 @@ class ConfigurationValidationTest {
                 new ClusterDefinition("dup", "broker2:9092", null));
 
         assertThatThrownBy(() -> new Configuration(null, clusters, null, null, null,
-                List.of(SIMPLE_VC), null, false, Optional.empty(), null, null))
+                List.of(SIMPLE_VC), null, false, Optional.empty(), null, null, null))
                 .isInstanceOf(IllegalConfigurationException.class)
                 .hasMessageContaining("duplicate names")
                 .hasMessageContaining("dup");
@@ -108,7 +108,7 @@ class ConfigurationValidationTest {
                 new RouterDefinition("dup", "Type", null, List.of(route)));
 
         assertThatThrownBy(() -> new Configuration(null, List.of(cluster), null, null, routers,
-                List.of(SIMPLE_VC), null, false, Optional.empty(), null, null))
+                List.of(SIMPLE_VC), null, false, Optional.empty(), null, null, null))
                 .isInstanceOf(IllegalConfigurationException.class)
                 .hasMessageContaining("duplicate names")
                 .hasMessageContaining("dup");
@@ -134,7 +134,7 @@ class ConfigurationValidationTest {
                 List.of(simpleGateway("gw")), false, false, null, null, null, null);
 
         assertThatCode(() -> new Configuration(null, List.of(cluster), null, null, null,
-                List.of(vcWithNamedTarget), null, false, Optional.empty(), null, null))
+                List.of(vcWithNamedTarget), null, false, Optional.empty(), null, null, null))
                 .doesNotThrowAnyException();
     }
 
@@ -157,7 +157,7 @@ class ConfigurationValidationTest {
                 new RouteTarget(null, "myrouter"),
                 List.of(simpleGateway("gateway")), false, false, null, null, null, null);
         var config = new Configuration(null, List.of(cluster), null, null, List.of(router),
-                List.of(virtualCluster), null, false, Optional.empty(), null, null);
+                List.of(virtualCluster), null, false, Optional.empty(), null, null, null);
         List<VirtualClusterModel> virtualClusterModels = config.virtualClusterModel(noOpRouterPfr());
         assertThat(virtualClusterModels).hasSize(1).singleElement().satisfies(vm -> {
             assertThat(vm.routing()).isInstanceOf(DynamicRouting.class);
@@ -174,7 +174,7 @@ class ConfigurationValidationTest {
                 new RouteTarget(null, "myrouter"),
                 List.of(simpleGateway("gw")), false, false, null, null, null, null);
         var config = new Configuration(null, List.of(cluster), null, null, List.of(router),
-                List.of(vc), null, false, Optional.empty(), null, null);
+                List.of(vc), null, false, Optional.empty(), null, null, null);
 
         var model = config.virtualClusterModel(noOpRouterPfr()).get(0);
 
@@ -197,7 +197,7 @@ class ConfigurationValidationTest {
                 new RouteTarget(null, "myrouter"),
                 List.of(simpleGateway("gw")), false, false, null, null, null, null);
         var config = new Configuration(null, List.of(c1, c2), null, null, List.of(router),
-                List.of(vc), null, false, Optional.empty(), null, null);
+                List.of(vc), null, false, Optional.empty(), null, null, null);
 
         var model = config.virtualClusterModel(noOpRouterPfr()).get(0);
 
@@ -217,7 +217,7 @@ class ConfigurationValidationTest {
                 new RouteTarget(null, "myrouter"),
                 List.of(simpleGateway("gw")), false, false, null, null, null, null);
         var config = new Configuration(null, List.of(c1, c2), null, null, List.of(router),
-                List.of(vc), null, false, Optional.empty(), null, null);
+                List.of(vc), null, false, Optional.empty(), null, null, null);
 
         var model = config.virtualClusterModel(noOpRouterPfr()).get(0);
 
@@ -234,7 +234,7 @@ class ConfigurationValidationTest {
                 new RouteTarget(null, "myrouter"),
                 List.of(simpleGateway("gw")), false, false, null, null, null, null);
         var config = new Configuration(null, List.of(cluster), filterDefs, null, List.of(router),
-                List.of(vc), null, false, Optional.empty(), null, null);
+                List.of(vc), null, false, Optional.empty(), null, null, null);
 
         var model = config.virtualClusterModel(noOpRouterPfr()).get(0);
 
@@ -262,14 +262,14 @@ class ConfigurationValidationTest {
     @Test
     void getMicrometerReturnsConfiguredValue() {
         var micrometer = List.of(new MicrometerDefinition("JmxMeterRegistry", null));
-        var config = new Configuration(null, null, null, null, null, List.of(SIMPLE_VC), micrometer, false, Optional.empty(), null, null);
+        var config = new Configuration(null, null, null, null, null, List.of(SIMPLE_VC), micrometer, false, Optional.empty(), null, null, null);
 
         assertThat(config.getMicrometer()).isEqualTo(micrometer);
     }
 
     @Test
     void isUseIoUringReturnsConfiguredValue() {
-        var config = new Configuration(null, null, null, null, null, List.of(SIMPLE_VC), null, true, Optional.empty(), null, null);
+        var config = new Configuration(null, null, null, null, null, List.of(SIMPLE_VC), null, true, Optional.empty(), null, null, null);
 
         assertThat(config.isUseIoUring()).isTrue();
     }
@@ -282,7 +282,7 @@ class ConfigurationValidationTest {
         var router = new RouterDefinition("myrouter", "Type", null, List.of(route));
 
         assertThatThrownBy(() -> new Configuration(null, List.of(cluster), filterDefs, null, List.of(router),
-                List.of(SIMPLE_VC), null, false, Optional.empty(), null, null))
+                List.of(SIMPLE_VC), null, false, Optional.empty(), null, null, null))
                 .isInstanceOf(IllegalConfigurationException.class)
                 .hasMessageContaining("references filters not defined")
                 .hasMessageContaining("undefined-filter");
@@ -296,7 +296,7 @@ class ConfigurationValidationTest {
         var router = new RouterDefinition("myrouter", "Type", null, List.of(route));
 
         assertThatCode(() -> new Configuration(null, List.of(cluster), filterDefs, null, List.of(router),
-                List.of(SIMPLE_VC), null, false, Optional.empty(), null, null))
+                List.of(SIMPLE_VC), null, false, Optional.empty(), null, null, null))
                 .doesNotThrowAnyException();
     }
 
@@ -309,7 +309,7 @@ class ConfigurationValidationTest {
                 new RouteTarget(null, "myrouter"),
                 List.of(simpleGateway("gw")), false, false, null, null, null, null);
         var config = new Configuration(null, List.of(cluster), null, null, List.of(router),
-                List.of(vc), null, false, Optional.empty(), null, null);
+                List.of(vc), null, false, Optional.empty(), null, null, null);
 
         var model = config.virtualClusterModel(noOpRouterPfr(), "demo");
 
@@ -338,7 +338,7 @@ class ConfigurationValidationTest {
         // When / Then
         var vcs = List.of(vc);
         assertThatThrownBy(() -> new Configuration(null, null, null, null, null,
-                vcs, null, false, Optional.empty(), null, null))
+                vcs, null, false, Optional.empty(), null, null, null))
                 .isInstanceOf(IllegalConfigurationException.class)
                 .hasMessageContaining("demo")
                 .hasMessageContaining("missingRouter");
@@ -359,7 +359,7 @@ class ConfigurationValidationTest {
         var routers = List.of(router);
         var vcs = List.of(vc);
         assertThatThrownBy(() -> new Configuration(null, clusters, null, null, routers,
-                vcs, null, false, Optional.empty(), null, null))
+                vcs, null, false, Optional.empty(), null, null, null))
                 .isInstanceOf(IllegalConfigurationException.class)
                 .hasMessageContaining("demo")
                 .hasMessageContaining("nonExistentRouter");
@@ -367,14 +367,14 @@ class ConfigurationValidationTest {
 
     @Test
     void shouldRejectNoVirtualClusters() {
-        assertThatThrownBy(() -> new Configuration(null, null, null, null, null, List.of(), null, false, Optional.empty(), null, null))
+        assertThatThrownBy(() -> new Configuration(null, null, null, null, null, List.of(), null, false, Optional.empty(), null, null, null))
                 .isInstanceOf(IllegalConfigurationException.class)
                 .hasMessageContaining("At least one virtual cluster");
     }
 
     @Test
     void shouldRejectNullVirtualClusters() {
-        assertThatThrownBy(() -> new Configuration(null, null, null, null, null, null, null, false, Optional.empty(), null, null))
+        assertThatThrownBy(() -> new Configuration(null, null, null, null, null, null, null, false, Optional.empty(), null, null, null))
                 .isInstanceOf(IllegalConfigurationException.class)
                 .hasMessageContaining("At least one virtual cluster");
     }
@@ -399,7 +399,7 @@ class ConfigurationValidationTest {
 
         var vcs = List.of(vc);
         assertThatThrownBy(() -> new Configuration(null, null, null, null, null,
-                vcs, null, false, Optional.empty(), null, null))
+                vcs, null, false, Optional.empty(), null, null, null))
                 .isInstanceOf(IllegalConfigurationException.class)
                 .hasMessageContaining("unknown router")
                 .hasMessageContaining("nonexistent-router");
@@ -415,7 +415,7 @@ class ConfigurationValidationTest {
                 List.of(simpleGateway("gw")), false, false, null, null, null, null);
 
         assertThatCode(() -> new Configuration(null, List.of(cluster), null, null, List.of(router),
-                List.of(vc), null, false, Optional.empty(), null, null))
+                List.of(vc), null, false, Optional.empty(), null, null, null))
                 .doesNotThrowAnyException();
     }
 
@@ -431,7 +431,7 @@ class ConfigurationValidationTest {
                 List.of(simpleGateway("gw")), false, false, null, null, null, null);
 
         assertThatThrownBy(() -> new Configuration(null, List.of(cluster), null, null, List.of(outerRouter, innerRouter),
-                List.of(vc), null, false, Optional.empty(), null, null))
+                List.of(vc), null, false, Optional.empty(), null, null, null))
                 .isInstanceOf(IllegalConfigurationException.class)
                 .hasMessageContaining("nested routers are not yet supported");
     }
@@ -450,7 +450,7 @@ class ConfigurationValidationTest {
                 List.of(simpleGateway("gw")), false, false, null, null, null, null);
 
         assertThatThrownBy(() -> new Configuration(null, List.of(c1, c2), null, null, List.of(router, innerRouter),
-                List.of(vc), null, false, Optional.empty(), null, null))
+                List.of(vc), null, false, Optional.empty(), null, null, null))
                 .isInstanceOf(IllegalConfigurationException.class)
                 .hasMessageContaining("nested routers are not yet supported");
     }

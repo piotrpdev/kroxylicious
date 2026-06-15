@@ -138,7 +138,7 @@ class ProxyConfigGenerator {
                 false,
                 Optional.empty(),
                 null,
-                null);
+                null, null);
 
         return toYaml(configuration);
     }
