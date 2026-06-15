@@ -56,3 +56,6 @@ data:
             end: 2
       filters:
       - "filter-one.KafkaProtocolFilter.kroxylicious.io"
+    security:
+      filePermissions:
+        policy: "RELAXED"

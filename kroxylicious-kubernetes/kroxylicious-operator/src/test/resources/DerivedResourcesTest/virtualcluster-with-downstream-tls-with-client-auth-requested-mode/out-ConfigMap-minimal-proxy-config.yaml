@@ -45,3 +45,6 @@ data:
             storeType: "PEM"
             trustOptions:
               clientAuth: "REQUESTED"
+    security:
+      filePermissions:
+        policy: "RELAXED"

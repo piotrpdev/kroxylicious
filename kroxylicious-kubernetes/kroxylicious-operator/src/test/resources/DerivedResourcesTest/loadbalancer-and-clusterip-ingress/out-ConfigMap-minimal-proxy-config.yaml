@@ -48,3 +48,6 @@ data:
           key:
             privateKeyFile: "/opt/kroxylicious/virtual-cluster/server-certs/downstream-tls-cert/tls.key"
             certificateFile: "/opt/kroxylicious/virtual-cluster/server-certs/downstream-tls-cert/tls.crt"
+    security:
+      filePermissions:
+        policy: "RELAXED"

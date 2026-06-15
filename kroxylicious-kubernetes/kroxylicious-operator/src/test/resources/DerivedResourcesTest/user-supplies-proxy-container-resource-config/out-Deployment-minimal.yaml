@@ -90,6 +90,8 @@ spec:
               "cpu": "100m"
               "memory": "102Mi"
       securityContext:
+        fsGroup: 185
+        runAsGroup: 185
         runAsNonRoot: true
         seccompProfile:
           type: "RuntimeDefault"
