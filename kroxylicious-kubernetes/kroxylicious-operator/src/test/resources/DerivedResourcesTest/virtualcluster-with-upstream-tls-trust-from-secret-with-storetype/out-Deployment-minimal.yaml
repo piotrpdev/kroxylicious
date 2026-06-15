@@ -92,6 +92,8 @@ spec:
               name: "secrets-upstream-tls-cert"
               readOnly: true
       securityContext:
+        fsGroup: 185
+        runAsGroup: 185
         runAsNonRoot: true
         seccompProfile:
           type: "RuntimeDefault"
@@ -101,7 +103,9 @@ spec:
           name: "config-volume"
         - name: "secrets-upstream-tls-cert"
           secret:
+            defaultMode: 288
             secretName: "upstream-tls-cert"
         - secret:
+            defaultMode: 288
             secretName: "upstream-ca"
           name: "secrets-upstream-ca"
