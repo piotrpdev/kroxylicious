@@ -29,6 +29,8 @@ class SecretSecureConfigProviderTest {
         // then
         assertThat(cp.volume()).extracting(Volume::getName).isEqualTo("secrets-my-secret");
         assertThat(cp.volume()).extracting(Volume::getSecret).extracting(SecretVolumeSource::getSecretName).isEqualTo("my-secret");
+        assertThat(cp.volume()).extracting(Volume::getSecret).extracting(SecretVolumeSource::getDefaultMode)
+                .isEqualTo(ProxySecurityModel.SECRET_VOLUME_DEFAULT_MODE);
 
         assertThat(cp.mount()).extracting(VolumeMount::getName).isEqualTo("secrets-my-secret");
         assertThat(cp.mount()).extracting(VolumeMount::getMountPath).isEqualTo("/prefix/secret1/my-secret");
