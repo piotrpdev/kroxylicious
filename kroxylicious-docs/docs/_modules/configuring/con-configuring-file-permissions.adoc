@@ -1,0 +1,93 @@
+////
+  // Copyright Kroxylicious Authors.
+  //
+  // Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
+////
+
+:_mod-docs-content-type: CONCEPT
+
+[id='con-configuring-file-permissions-{context}']
+= Enforcing minimum file permissions on confidential files
+
+[role="_abstract"]
+Kroxylicious validates that confidential files (TLS private keys, keystores, truststores, password files, and KMS credential files) are not accessible by group or other users, preventing accidental secret exposure through overly permissive filesystem permissions.
+
+Similar to how the `ssh` command refuses to use a private key file that is world-readable, you can configure Kroxylicious to reject files whose permissions allow group or other access.
+
+== Policy modes
+
+The `security.filePermissions.policy` property controls how permissions are checked:
+
+`STRICT`:: Files must be accessible only by their owner.
+Permissions with any group or other read, write, or execute bits set are rejected.
+This is equivalent to requiring `chmod 400` or `chmod 600` on confidential files.
+Use this in production environments.
+
+`RELAXED`:: Other-user access is forbidden, but group access is permitted.
+This supports Kubernetes deployments where secrets are mounted with a group set via `fsGroup` in the pod security context, making file permissions such as `0440` acceptable.
+
+`DISABLED`:: No permissions are enforced.
+A warning is logged for world-readable files, but startup is never rejected.
+This is the default for backward compatibility until the default is changed to `STRICT` in a future release.
+
+.Configuration fragment enabling STRICT permission checking
+[source,yaml]
+----
+security:
+  filePermissions:
+    policy: STRICT
+----
+
+.Configuration fragment enabling RELAXED permission checking for Kubernetes
+[source,yaml]
+----
+security:
+  filePermissions:
+    policy: RELAXED
+----
+
+== What is checked
+
+When a non-`DISABLED` policy is configured, Kroxylicious checks permissions before reading any of the following files:
+
+* TLS private key files (configured via `key.privateKeyFile`)
+* TLS keystore and truststore files (configured via `key.storeFile` or `trust.storeFile`)
+* Password files referenced by `FilePassword` providers (including KMS credentials such as Vault tokens, AWS access keys, and Azure client secrets)
+* AWS IRSA web identity token files
+* AWS EKS Pod Identity authorization token files
+
+== Making files compliant
+
+To restrict a file to owner-only access:
+
+[source,bash]
+----
+chmod 600 /path/to/private.key
+chmod 600 /path/to/keystore.p12
+chmod 600 /path/to/password.txt
+----
+
+== Kubernetes considerations
+
+Kubernetes mounts `Secret` volume files as `root:root 0644` by default, which is world-readable.
+The Kroxylicious Operator automatically sets the pod security context so that secret files can be read with restricted permissions:
+
+* `fsGroup: 185` - Kubernetes changes the group ownership of mounted secret files to GID 185 (the `kroxylicious` user's GID in the proxy image).
+* `runAsGroup: 185` - The proxy container process runs with GID 185, allowing it to read files owned by that group.
+* `defaultMode: 0440` - Secret volumes are mounted with owner+group read-only permissions, preventing world-readable secrets.
+
+With these settings in place, the `RELAXED` policy is suitable for operator-managed deployments:
+
+[source,yaml]
+----
+security:
+  filePermissions:
+    policy: RELAXED
+----
+
+When running the proxy directly on Linux (not via the operator), use `STRICT` policy and ensure secret files have owner-only permissions:
+
+[source,bash]
+----
+chmod 600 /path/to/private.key
+----
