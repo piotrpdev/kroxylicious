@@ -38,6 +38,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
+import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.openshift.api.model.Route;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.dependent.managed.DefaultManagedWorkflowAndDependentResourceContext;
@@ -71,6 +72,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class DerivedResourcesTest {
 
@@ -310,6 +312,14 @@ class DerivedResourcesTest {
         }
     }
 
+    /**
+     * Directories whose name starts with {@code openshift-} are treated as OpenShift scenarios:
+     * the mocked client is configured to report that the Route API is available, which causes
+     * {@link ProxySecurityModel#isOpenShift} to return {@code true} and the operator to omit
+     * {@code fsGroup} and {@code runAsGroup} from the pod security context.
+     */
+    private static final String OPENSHIFT_SCENARIO_PREFIX = "openshift-";
+
     @NonNull
     private static Context<KafkaProxy> buildContext(Path testDir,
                                                     KafkaProxy kafkaProxy,
@@ -323,6 +333,11 @@ class DerivedResourcesTest {
         var resourceContext = new DefaultManagedWorkflowAndDependentResourceContext(null, null, context);
         resourceContext.put(Crc32ChecksumGenerator.CHECKSUM_CONTEXT_KEY, new FixedChecksumGenerator(123654L));
         doReturn(resourceContext).when(context).managedWorkflowAndDependentResourceContext();
+
+        boolean isOpenShift = fileName(testDir).startsWith(OPENSHIFT_SCENARIO_PREFIX);
+        KubernetesClient kubernetesClient = mock(KubernetesClient.class);
+        when(kubernetesClient.supports(Route.class)).thenReturn(isOpenShift);
+        doReturn(kubernetesClient).when(context).getClient();
 
         Set<KafkaProtocolFilter> filterInstances = Set.copyOf(resourcesFromFiles(TestFiles.childFilesMatching(testDir,
                 "in-" + HasMetadata.getKind(KafkaProtocolFilter.class) + "-*.yaml"), KafkaProtocolFilter.class));
