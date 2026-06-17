@@ -23,6 +23,8 @@ import io.fabric8.kubernetes.api.model.Quantity;
 import io.fabric8.kubernetes.api.model.ResourceRequirements;
 import io.fabric8.kubernetes.api.model.ResourceRequirementsBuilder;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
+import io.fabric8.kubernetes.client.KubernetesClient;
+import io.fabric8.openshift.api.model.Route;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.dependent.managed.DefaultManagedWorkflowAndDependentResourceContext;
 
@@ -33,6 +35,7 @@ import io.kroxylicious.kubernetes.api.v1alpha1.KafkaServiceBuilder;
 import io.kroxylicious.kubernetes.api.v1alpha1.VirtualKafkaCluster;
 import io.kroxylicious.kubernetes.api.v1alpha1.VirtualKafkaClusterBuilder;
 import io.kroxylicious.kubernetes.operator.Annotations;
+import io.kroxylicious.kubernetes.operator.ProxySecurityModel;
 import io.kroxylicious.kubernetes.operator.ResourcesUtil;
 import io.kroxylicious.kubernetes.operator.model.ProxyModel;
 import io.kroxylicious.kubernetes.operator.model.networking.ProxyNetworkingModel;
@@ -55,6 +58,7 @@ class ProxyDeploymentTest {
 
     private KafkaProxy kafkaProxy;
     private Context<KafkaProxy> kubernetesContext;
+    private KubernetesClient kubernetesClient;
     private VirtualKafkaCluster virtualKafkaCluster;
     private KafkaService kafkaService;
     private DefaultManagedWorkflowAndDependentResourceContext<KafkaProxy> resourceContext;
@@ -118,6 +122,72 @@ class ProxyDeploymentTest {
     }
 
     @Test
+    void shouldSetFsGroupOnPodSecurityContext() {
+        // Given
+        ProxyDeploymentDependentResource proxyDeploymentDependentResource = new ProxyDeploymentDependentResource();
+
+        // When
+        Deployment actual = proxyDeploymentDependentResource.desired(kafkaProxy, kubernetesContext);
+
+        // Then - fsGroup ensures secret volume files are group-owned by the proxy GID
+        assertThat(actual.getSpec().getTemplate().getSpec().getSecurityContext().getFsGroup())
+                .isEqualTo(ProxySecurityModel.PROXY_CONTAINER_GID);
+    }
+
+    @Test
+    void shouldSetRunAsGroupOnPodSecurityContext() {
+        // Given
+        ProxyDeploymentDependentResource proxyDeploymentDependentResource = new ProxyDeploymentDependentResource();
+
+        // When
+        Deployment actual = proxyDeploymentDependentResource.desired(kafkaProxy, kubernetesContext);
+
+        // Then - runAsGroup matches fsGroup so the container process can read 0440 secret files
+        assertThat(actual.getSpec().getTemplate().getSpec().getSecurityContext().getRunAsGroup())
+                .isEqualTo(ProxySecurityModel.PROXY_CONTAINER_GID);
+    }
+
+    @Test
+    void shouldOmitFsGroupAndRunAsGroupOnOpenShift() {
+        // Given - simulate OpenShift by changing the shared client mock
+        when(kubernetesClient.supports(Route.class)).thenReturn(true);
+        ProxyDeploymentDependentResource proxyDeploymentDependentResource = new ProxyDeploymentDependentResource();
+
+        // When
+        Deployment actual = proxyDeploymentDependentResource.desired(kafkaProxy, kubernetesContext);
+
+        // Then - fsGroup and runAsGroup must be absent: OpenShift's restricted SCC enforces
+        // namespace-allocated GID ranges, and GID 0 is always supplemental so files owned by
+        // root:root with mode 0440 are already readable without a custom fsGroup.
+        var secCtx = actual.getSpec().getTemplate().getSpec().getSecurityContext();
+        assertThat(secCtx.getFsGroup()).isNull();
+        assertThat(secCtx.getRunAsGroup()).isNull();
+
+        // Other security properties must still be present on OpenShift
+        assertThat(secCtx.getRunAsNonRoot()).isTrue();
+        assertThat(secCtx.getSeccompProfile()).isNotNull()
+                .satisfies(p -> assertThat(p.getType()).isEqualTo("RuntimeDefault"));
+    }
+
+    @Test
+    void shouldSetFsGroupAndRunAsGroupOnPlainKubernetes() {
+        // Given - setupContext() already stubs a plain-Kubernetes client (supports(Route) = false)
+        ProxyDeploymentDependentResource proxyDeploymentDependentResource = new ProxyDeploymentDependentResource();
+
+        // When
+        Deployment actual = proxyDeploymentDependentResource.desired(kafkaProxy, kubernetesContext);
+
+        // Then - fsGroup and runAsGroup cause the kubelet to chown secret volume files to the
+        // proxy GID so they are readable via group membership with defaultMode 0440
+        var secCtx = actual.getSpec().getTemplate().getSpec().getSecurityContext();
+        assertThat(secCtx.getFsGroup()).isEqualTo(ProxySecurityModel.PROXY_CONTAINER_GID);
+        assertThat(secCtx.getRunAsGroup()).isEqualTo(ProxySecurityModel.PROXY_CONTAINER_GID);
+        assertThat(secCtx.getRunAsNonRoot()).isTrue();
+        assertThat(secCtx.getSeccompProfile()).isNotNull()
+                .satisfies(p -> assertThat(p.getType()).isEqualTo("RuntimeDefault"));
+    }
+
+    @Test
     void shouldConfigureReadinessProbe() {
         // Given
         ProxyDeploymentDependentResource proxyDeploymentDependentResource = new ProxyDeploymentDependentResource();
@@ -162,6 +232,13 @@ class ProxyDeploymentTest {
         resourceContext = new DefaultManagedWorkflowAndDependentResourceContext<>(null, kafkaProxy, context);
         configureProxyModel(proxyModel);
         when(context.managedWorkflowAndDependentResourceContext()).thenReturn(resourceContext);
+
+        // Default: plain Kubernetes (not OpenShift). Tests that need OpenShift behaviour
+        // call when(kubernetesClient.supports(Route.class)).thenReturn(true) directly.
+        kubernetesClient = mock(KubernetesClient.class);
+        when(kubernetesClient.supports(Route.class)).thenReturn(false);
+        when(context.getClient()).thenReturn(kubernetesClient);
+
         return context;
     }
 

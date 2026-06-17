@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import io.fabric8.kubernetes.api.model.Container;
 import io.fabric8.kubernetes.api.model.ContainerBuilder;
 import io.fabric8.kubernetes.api.model.IntOrString;
+import io.fabric8.kubernetes.api.model.PodSecurityContextBuilder;
 import io.fabric8.kubernetes.api.model.PodTemplateSpec;
 import io.fabric8.kubernetes.api.model.PodTemplateSpecBuilder;
 import io.fabric8.kubernetes.api.model.PodTemplateSpecFluent;
@@ -39,6 +40,7 @@ import io.kroxylicious.kubernetes.api.v1alpha1.KafkaProxySpec;
 import io.kroxylicious.kubernetes.api.v1alpha1.kafkaproxyspec.Infrastructure;
 import io.kroxylicious.kubernetes.api.v1alpha1.kafkaproxyspec.infrastructure.ProxyContainer;
 import io.kroxylicious.kubernetes.operator.Annotations;
+import io.kroxylicious.kubernetes.operator.ProxySecurityModel;
 import io.kroxylicious.kubernetes.operator.ResourcesUtil;
 import io.kroxylicious.kubernetes.operator.checksum.Crc32ChecksumGenerator;
 import io.kroxylicious.kubernetes.operator.checksum.MetadataChecksumGenerator;
@@ -108,7 +110,7 @@ public class ProxyDeploymentDependentResource
                     .editOrNewSelector()
                     .withMatchLabels(deploymentSelector(primary))
                     .endSelector()
-                    .withTemplate(podTemplate(primary, kafkaProxyContext, model.networkingModel(), model.clustersWithValidNetworking(), checksum))
+                    .withTemplate(podTemplate(primary, kafkaProxyContext, model.networkingModel(), model.clustersWithValidNetworking(), checksum, ProxySecurityModel.isOpenShift(context.getClient())))
                 .endSpec()
                 .build();
         // @formatter:on
@@ -172,7 +174,8 @@ public class ProxyDeploymentDependentResource
                                         KafkaProxyContext kafkaProxyContext,
                                         ProxyNetworkingModel ingressModel,
                                         List<ClusterResolutionResult> clusterResolutionResults,
-                                        String checksum) {
+                                        String checksum,
+                                        boolean openShift) {
         PodTemplateSpecFluent<PodTemplateSpecBuilder>.MetadataNested<PodTemplateSpecBuilder> metadataBuilder = new PodTemplateSpecBuilder()
                 .editOrNewMetadata()
                 .addToLabels(podLabels(primary));
@@ -180,16 +183,26 @@ public class ProxyDeploymentDependentResource
             Annotations.annotateWithReferentChecksum(metadataBuilder, checksum);
         }
 
+        // On OpenShift, fsGroup and runAsGroup are omitted: OpenShift automatically adds GID 0
+        // as a supplemental group to every container, so secret volume files (root:root 0440)
+        // are readable without a custom fsGroup. Setting fsGroup would conflict with OpenShift's
+        // namespace-allocated GID ranges enforced by the restricted SCC.
+        // On plain Kubernetes, fsGroup and runAsGroup are set so the kubelet chowns volume files
+        // to the proxy GID and the container process can read them via group membership.
+        PodSecurityContextBuilder podSecBuilder = new PodSecurityContextBuilder()
+                .withRunAsNonRoot(true)
+                .withNewSeccompProfile().withType("RuntimeDefault").endSeccompProfile();
+        if (!openShift) {
+            podSecBuilder
+                    .withFsGroup(ProxySecurityModel.PROXY_CONTAINER_GID)
+                    .withRunAsGroup(ProxySecurityModel.PROXY_CONTAINER_GID);
+        }
+
         // @formatter:off
         return metadataBuilder
                 .endMetadata()
                 .editOrNewSpec()
-                    .withNewSecurityContext()
-                        .withRunAsNonRoot(true)
-                        .withNewSeccompProfile()
-                            .withType("RuntimeDefault")
-                        .endSeccompProfile()
-                    .endSecurityContext()
+                    .withSecurityContext(podSecBuilder.build())
                     .withContainers(proxyContainer(primary, kafkaProxyContext, ingressModel, clusterResolutionResults))
                     .addNewVolume()
                         .withName(CONFIG_VOLUME)

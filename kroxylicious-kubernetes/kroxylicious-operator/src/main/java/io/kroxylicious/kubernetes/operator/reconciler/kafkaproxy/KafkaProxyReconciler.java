@@ -64,6 +64,7 @@ import io.kroxylicious.kubernetes.api.v1alpha1.VirtualKafkaCluster;
 import io.kroxylicious.kubernetes.api.v1alpha1.virtualkafkaclusterspec.ingresses.Tls.TlsClientAuthentication;
 import io.kroxylicious.kubernetes.operator.DeploymentReadyCondition;
 import io.kroxylicious.kubernetes.operator.OperatorLoggingKeys;
+import io.kroxylicious.kubernetes.operator.ProxySecurityModel;
 import io.kroxylicious.kubernetes.operator.ResourceState;
 import io.kroxylicious.kubernetes.operator.ResourcesUtil;
 import io.kroxylicious.kubernetes.operator.SecureConfigInterpolator;
@@ -412,6 +413,7 @@ public class KafkaProxyReconciler implements
                             .withName(ResourcesUtil.volumeName("", SECRET_PLURAL, ref.getName()))
                             .withNewSecret()
                             .withSecretName(ref.getName())
+                            .withDefaultMode(ProxySecurityModel.SECRET_VOLUME_DEFAULT_MODE)
                             .endSecret()
                             .build();
                     Path mountPath = parent.resolve(ref.getName());
@@ -466,7 +468,7 @@ public class KafkaProxyReconciler implements
 
         var vol = new VolumeBuilder().withName(volName);
         if (isSecret) {
-            vol.withNewSecret().withSecretName(trustAnchorRef.getRef().getName()).endSecret();
+            vol.withNewSecret().withSecretName(trustAnchorRef.getRef().getName()).withDefaultMode(ProxySecurityModel.SECRET_VOLUME_DEFAULT_MODE).endSecret();
         }
         else {
             vol.withNewConfigMap().withName(trustAnchorRef.getRef().getName()).endConfigMap();
