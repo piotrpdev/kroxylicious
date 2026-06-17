@@ -9,6 +9,7 @@ package io.kroxylicious.proxy.internal.tls;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.util.Optional;
 
@@ -21,6 +22,8 @@ import io.kroxylicious.proxy.config.tls.KeyPair;
 import io.kroxylicious.proxy.config.tls.KeyProvider;
 import io.kroxylicious.proxy.config.tls.KeyProviderVisitor;
 import io.kroxylicious.proxy.config.tls.KeyStore;
+import io.kroxylicious.proxy.security.FilePermissionValidator;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 
 import edu.umd.cs.findbugs.annotations.Nullable;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -36,9 +39,15 @@ public class NettyKeyProvider {
     }
 
     private final KeyProvider delegate;
+    private final Policy policy;
 
     public NettyKeyProvider(KeyProvider delegate) {
+        this(delegate, Policy.DISABLED);
+    }
+
+    public NettyKeyProvider(KeyProvider delegate, Policy policy) {
         this.delegate = delegate;
+        this.policy = policy;
     }
 
     public SslContextBuilder forClient() {
@@ -52,10 +61,12 @@ public class NettyKeyProvider {
 
     private SslContextBuilder configureBuilder(SslContextBuilderA a, SslContextBuilderB b) {
         return this.delegate.accept(new KeyProviderVisitor<>() {
-            @SuppressFBWarnings("PATH_TRAVERSAL_IN")
+            @SuppressFBWarnings(value = "PATH_TRAVERSAL_IN", justification = "Paths are provided by the operator via Kroxylicious configuration and may reside anywhere on the filesystem.")
             @Override
             public SslContextBuilder visit(KeyPair keyPair) {
                 try {
+                    FilePermissionValidator.validate(Path.of(keyPair.privateKeyFile()), policy, "private key");
+                    FilePermissionValidator.validatePasswordProvider(keyPair.keyPasswordProvider(), policy);
                     return a.keyManager(new File(keyPair.certificateFile()), new File(keyPair.privateKeyFile()),
                             Optional.ofNullable(keyPair.keyPasswordProvider()).map(PasswordProvider::getProvidedPassword).orElse(null));
                 }
@@ -64,12 +75,15 @@ public class NettyKeyProvider {
                 }
             }
 
-            @SuppressFBWarnings("PATH_TRAVERSAL_IN")
+            @SuppressFBWarnings(value = "PATH_TRAVERSAL_IN", justification = "Paths are provided by the operator via Kroxylicious configuration and may reside anywhere on the filesystem.")
             @Override
             public SslContextBuilder visit(KeyStore keyStore) {
                 try {
-                    var keyStoreFile = new File(keyStore.storeFile());
+                    FilePermissionValidator.validate(Path.of(keyStore.storeFile()), policy, "keystore");
+                    FilePermissionValidator.validatePasswordProvider(keyStore.storePasswordProvider(), policy);
+                    FilePermissionValidator.validatePasswordProvider(keyStore.keyPasswordProvider(), policy);
 
+                    var keyStoreFile = new File(keyStore.storeFile());
                     if (keyStore.isPemType()) {
                         return a.keyManager(keyStoreFile, keyStoreFile,
                                 Optional.ofNullable(keyStore.keyPasswordProvider()).map(PasswordProvider::getProvidedPassword).orElse(null));
