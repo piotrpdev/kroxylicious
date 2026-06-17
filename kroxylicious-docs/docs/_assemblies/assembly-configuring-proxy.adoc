@@ -27,4 +27,6 @@ include::../_modules/configuring/con-configuring-network-settings.adoc[leveloffs
 include::../_modules/configuring/con-configuring-idle-timeouts.adoc[leveloffset=+1]
 include::../_modules/configuring/con-configuring-proxy-protocol.adoc[leveloffset=+1]
 
+include::../_modules/configuring/con-configuring-file-permissions.adoc[leveloffset=+1]
+
 include::../_modules/configuring/ref-configuring-proxy-example.adoc[leveloffset=+1]
