@@ -92,6 +92,7 @@ import io.kroxylicious.kubernetes.api.v1alpha1.kafkaservicespec.NodeIdRangesBuil
 import io.kroxylicious.kubernetes.api.v1alpha1.virtualkafkaclusterspec.Ingresses;
 import io.kroxylicious.kubernetes.api.v1alpha1.virtualkafkaclusterspec.IngressesBuilder;
 import io.kroxylicious.kubernetes.operator.Annotations;
+import io.kroxylicious.kubernetes.operator.ProxySecurityModel;
 import io.kroxylicious.kubernetes.operator.ResourcesUtil;
 import io.kroxylicious.kubernetes.operator.SecureConfigInterpolator;
 import io.kroxylicious.kubernetes.operator.TestKeyMaterial;
@@ -1080,6 +1081,95 @@ public class KafkaProxyReconcilerIT {
             return findOnlyResourceNamed(KafkaProxyReconcilerIT.CLUSTER_BAR_CLUSTERIP_INGRESS, ingresses).orElseThrow();
         }
 
+    }
+
+    @Test
+    void shouldConfigurePodSecurityContextOnPlainKubernetes() {
+        assumeThat(supportsRoute())
+                .withFailMessage("Test requires plain Kubernetes (not OpenShift); skipping on OpenShift")
+                .isFalse();
+
+        // Given
+        var created = doCreate();
+        KafkaProxy proxy = created.proxy();
+
+        // When / Then - on plain Kubernetes, fsGroup and runAsGroup cause the kubelet to
+        // chown secret volume files to the proxy GID so they are readable via group membership
+        AWAIT.alias("Deployment has expected pod security context").untilAsserted(() -> {
+            var deployment = clusterUser.get(Deployment.class, ProxyDeploymentDependentResource.deploymentName(proxy));
+            assertThat(deployment).isNotNull();
+            var secCtx = deployment.getSpec().getTemplate().getSpec().getSecurityContext();
+            assertThat(secCtx).isNotNull();
+            assertThat(secCtx.getRunAsNonRoot()).as("runAsNonRoot").isTrue();
+            assertThat(secCtx.getSeccompProfile()).as("seccompProfile").isNotNull()
+                    .satisfies(p -> assertThat(p.getType()).isEqualTo("RuntimeDefault"));
+            assertThat(secCtx.getFsGroup()).as("fsGroup").isEqualTo(ProxySecurityModel.PROXY_CONTAINER_GID);
+            assertThat(secCtx.getRunAsGroup()).as("runAsGroup").isEqualTo(ProxySecurityModel.PROXY_CONTAINER_GID);
+        });
+    }
+
+    @Test
+    void proxyDeploymentHasCorrectPodSecurityContext_openShift() {
+        assumeThat(supportsRoute())
+                .withFailMessage("Test requires OpenShift; skipping on plain Kubernetes")
+                .isTrue();
+
+        // Given
+        var created = doCreate();
+        KafkaProxy proxy = created.proxy();
+
+        // When / Then - on OpenShift, fsGroup and runAsGroup must be absent to avoid
+        // conflicting with the namespace-allocated GID ranges enforced by the restricted SCC.
+        // GID 0 is always a supplemental group on OpenShift, so root:root 0440 files are
+        // already readable without a custom fsGroup.
+        AWAIT.alias("Deployment has expected pod security context").untilAsserted(() -> {
+            var deployment = clusterUser.get(Deployment.class, ProxyDeploymentDependentResource.deploymentName(proxy));
+            assertThat(deployment).isNotNull();
+            var secCtx = deployment.getSpec().getTemplate().getSpec().getSecurityContext();
+            assertThat(secCtx).isNotNull();
+            assertThat(secCtx.getRunAsNonRoot()).as("runAsNonRoot").isTrue();
+            assertThat(secCtx.getSeccompProfile()).as("seccompProfile").isNotNull()
+                    .satisfies(p -> assertThat(p.getType()).isEqualTo("RuntimeDefault"));
+            assertThat(secCtx.getFsGroup()).as("fsGroup should be absent on OpenShift").isNull();
+            assertThat(secCtx.getRunAsGroup()).as("runAsGroup should be absent on OpenShift").isNull();
+        });
+    }
+
+    @Test
+    void proxyConfigContainsRelaxedFilePermissionPolicy() {
+        // Given
+        var created = doCreate();
+
+        // When / Then - the operator must inject RELAXED file permission policy into the proxy
+        // configuration so the runtime rejects world-readable secret files
+        assertProxyConfigContents(created.proxy(),
+                Set.of("security:", "filePermissions:", "policy: \"RELAXED\""),
+                Set.of("policy: \"STRICT\"", "policy: \"DISABLED\""));
+    }
+
+    @Test
+    void proxyDeploymentMountsSecretVolumesWithRestrictedDefaultMode() {
+        // Given - a KafkaProxy with upstream TLS so a secret volume is created
+        clusterUser.create(tlsKeyAndCertSecret(UPSTREAM_TLS_CERTIFICATE_SECRET_NAME));
+        clusterUser.create(trustAnchorSecret(CA_CERT_SECRET_NAME));
+        KafkaService kafkaService = kafkaServiceWithTlsWithTrustAnchorRefAsSecret();
+        var created = doCreate(kafkaService);
+        KafkaProxy proxy = created.proxy();
+
+        // When / Then - all secret volumes must have defaultMode 0440 (= 288 decimal)
+        // so files are not world-readable even on clusters that don't enforce network policies
+        AWAIT.alias("Secret volumes have restricted defaultMode").untilAsserted(() -> {
+            var deployment = clusterUser.get(Deployment.class, ProxyDeploymentDependentResource.deploymentName(proxy));
+            assertThat(deployment).isNotNull();
+            var volumes = deployment.getSpec().getTemplate().getSpec().getVolumes();
+            assertThat(volumes)
+                    .filteredOn(v -> v.getSecret() != null)
+                    .as("all secret volumes")
+                    .isNotEmpty()
+                    .allSatisfy(v -> assertThat(v.getSecret().getDefaultMode())
+                            .as("defaultMode of secret volume '%s'", v.getName())
+                            .isEqualTo(ProxySecurityModel.SECRET_VOLUME_DEFAULT_MODE));
+        });
     }
 
     CreatedResources doCreate() {
