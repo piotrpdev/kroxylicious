@@ -342,19 +342,21 @@ public class VirtualClusterModel implements AutoCloseable {
                 .orElse(false);
     }
 
-    public static NettyTrustProvider configureTrustProvider(Tls tlsConfiguration) {
     public Policy getFilePermissionPolicy() {
         return filePermissionPolicy;
     }
 
+    public static NettyTrustProvider configureTrustProvider(Tls tlsConfiguration, Policy policy) {
         final TrustProvider trustProvider = Optional.ofNullable(tlsConfiguration.trust()).orElse(PlatformTrustProvider.INSTANCE);
-        return new NettyTrustProvider(trustProvider);
+        return new NettyTrustProvider(trustProvider, policy);
     }
 
     private Optional<SslContext> buildUpstreamSslContext() {
         return targetCluster.tls().map(targetClusterTls -> {
             try {
-                var sslContextBuilder = Optional.ofNullable(targetClusterTls.key()).map(NettyKeyProvider::new).map(NettyKeyProvider::forClient)
+                var sslContextBuilder = Optional.ofNullable(targetClusterTls.key())
+                        .map(key -> new NettyKeyProvider(key, filePermissionPolicy))
+                        .map(NettyKeyProvider::forClient)
                         .orElse(SslContextBuilder.forClient());
 
                 configureCipherSuites(sslContextBuilder, targetClusterTls);
@@ -367,7 +369,7 @@ public class VirtualClusterModel implements AutoCloseable {
                             throw new IllegalConfigurationException("Cannot apply trust options " + to + " to upstream (client) TLS.)");
                         });
 
-                var withTrust = configureTrustProvider(targetClusterTls).apply(sslContextBuilder);
+                var withTrust = configureTrustProvider(targetClusterTls, filePermissionPolicy).apply(sslContextBuilder);
 
                 return withTrust.build();
             }
@@ -604,13 +606,15 @@ public class VirtualClusterModel implements AutoCloseable {
                                             StableKroxyliciousLinkGenerator.INSTANCE.errorLink(StableKroxyliciousLinkGenerator.CLIENT_TLS)));
                 }
                 try {
-                    var sslContextBuilder = Optional.of(tlsConfiguration.key()).map(NettyKeyProvider::new).map(NettyKeyProvider::forServer)
+                    var sslContextBuilder = Optional.of(tlsConfiguration.key())
+                            .map(key -> new NettyKeyProvider(key, virtualCluster.filePermissionPolicy))
+                            .map(NettyKeyProvider::forServer)
                             .orElseThrow();
 
                     configureCipherSuites(sslContextBuilder, tlsConfiguration);
                     configureEnabledProtocols(sslContextBuilder, tlsConfiguration);
 
-                    return configureTrustProvider(tlsConfiguration).apply(sslContextBuilder).build();
+                    return configureTrustProvider(tlsConfiguration, virtualCluster.filePermissionPolicy).apply(sslContextBuilder).build();
                 }
                 catch (SSLException e) {
                     throw new UncheckedIOException(e);

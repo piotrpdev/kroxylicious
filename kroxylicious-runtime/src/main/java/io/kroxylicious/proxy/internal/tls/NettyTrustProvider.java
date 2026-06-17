@@ -8,6 +8,7 @@ package io.kroxylicious.proxy.internal.tls;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.nio.file.Path;
 import java.security.KeyStore;
 import java.util.Optional;
 
@@ -26,6 +27,8 @@ import io.kroxylicious.proxy.config.tls.TlsClientAuth;
 import io.kroxylicious.proxy.config.tls.TrustProvider;
 import io.kroxylicious.proxy.config.tls.TrustProviderVisitor;
 import io.kroxylicious.proxy.config.tls.TrustStore;
+import io.kroxylicious.proxy.security.FilePermissionValidator;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 
 import edu.umd.cs.findbugs.annotations.Nullable;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -34,17 +37,26 @@ public class NettyTrustProvider {
 
     public static final String HTTPS_HOSTNAME_VERIFICATION = "HTTPS";
     private final TrustProvider trustProvider;
+    private final Policy policy;
 
     public NettyTrustProvider(TrustProvider trustProvider) {
+        this(trustProvider, Policy.DISABLED);
+    }
+
+    public NettyTrustProvider(TrustProvider trustProvider, Policy policy) {
         this.trustProvider = trustProvider;
+        this.policy = policy;
     }
 
     public SslContextBuilder apply(SslContextBuilder builder) {
         return trustProvider.accept(new TrustProviderVisitor<>() {
-            @SuppressFBWarnings("PATH_TRAVERSAL_IN")
+            @SuppressFBWarnings(value = "PATH_TRAVERSAL_IN", justification = "Paths are provided by the operator via Kroxylicious configuration and may reside anywhere on the filesystem.")
             @Override
             public SslContextBuilder visit(TrustStore trustStore) {
                 try {
+                    FilePermissionValidator.validate(Path.of(trustStore.storeFile()), policy, "truststore");
+                    FilePermissionValidator.validatePasswordProvider(trustStore.storePasswordProvider(), policy);
+
                     enableHostnameVerification();
                     enableClientAuth(trustStore);
                     if (trustStore.isPemType()) {
