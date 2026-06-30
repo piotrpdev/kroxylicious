@@ -59,6 +59,10 @@
             <artifactId>kroxylicious-kubernetes-api</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>io.kroxylicious</groupId>
+            <artifactId>kroxylicious-security</artifactId>
+        </dependency>
 
         <!-- project dependencies - test -->
         <dependency>

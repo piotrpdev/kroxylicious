@@ -19,6 +19,7 @@ import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 
+import io.kroxylicious.proxy.config.secret.FilePassword;
 import io.kroxylicious.proxy.config.secret.PasswordProvider;
 import io.kroxylicious.proxy.config.tls.InsecureTls;
 import io.kroxylicious.proxy.config.tls.PlatformTrustProvider;
@@ -55,7 +56,7 @@ public class NettyTrustProvider {
             public SslContextBuilder visit(TrustStore trustStore) {
                 try {
                     FilePermissionValidator.validate(Path.of(trustStore.storeFile()), policy, "truststore");
-                    FilePermissionValidator.validatePasswordProvider(trustStore.storePasswordProvider(), policy);
+                    validatePasswordProvider(trustStore.storePasswordProvider());
 
                     enableHostnameVerification();
                     enableClientAuth(trustStore);
@@ -126,6 +127,13 @@ public class NettyTrustProvider {
                 builder.endpointIdentificationAlgorithm(httpsHostnameVerification);
             }
         });
+    }
+
+    @SuppressFBWarnings(value = "PATH_TRAVERSAL_IN", justification = "Paths are provided by the operator via Kroxylicious configuration and may reside anywhere on the filesystem.")
+    private void validatePasswordProvider(@Nullable PasswordProvider provider) {
+        if (provider instanceof FilePassword fp) {
+            FilePermissionValidator.validate(java.nio.file.Path.of(fp.passwordFile()), policy, "password file");
+        }
     }
 
     private static ClientAuth toNettyClientAuth(TlsClientAuth clientAuth) {
