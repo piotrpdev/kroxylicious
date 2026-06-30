@@ -185,6 +185,34 @@ spec:
                   format: int32
                   minimum: 0
                   default: 1
+                security:
+                  type: object
+                  description: |
+                    Security-related settings for the proxy deployment.
+                  properties:
+                    filePermissions:
+                      type: object
+                      description: |
+                        Configuration for file permission validation on confidential files
+                        (TLS private keys, keystores, and password files). When set, the proxy
+                        validates that confidential files do not have overly permissive access
+                        rights before using them.
+                      properties:
+                        policy:
+                          description: |
+                            The file permission validation policy. Defaults to RELAXED for
+                            operator-managed deployments.
+                            STRICT: files must be owner-only (0400/0600); no group or other bits.
+                            RELAXED: other-access bits forbidden; group bits permitted, suitable
+                            for Kubernetes deployments that use fsGroup.
+                            DISABLED: no enforcement; a warning is logged for files that would
+                            be rejected by other policies.
+                          type: string
+                          enum:
+                            - STRICT
+                            - RELAXED
+                            - DISABLED
+                          default: RELAXED
             status:
               type: object
               properties:

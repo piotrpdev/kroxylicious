@@ -231,9 +231,18 @@ public class KafkaProxyReconciler implements
                         // micrometer
                         Optional.empty(),
                         NetworkDefinitionBuilder.build(proxy),
-                        null, new SecurityConfig(new FilePermissionConfig(Policy.RELAXED))),
+                        null, new SecurityConfig(new FilePermissionConfig(resolveFilePermissionPolicy(proxy)))),
                 allVolumes,
                 allMounts);
+    }
+
+    private static Policy resolveFilePermissionPolicy(KafkaProxy proxy) {
+        return Optional.ofNullable(proxy.getSpec())
+                .map(KafkaProxySpec::getSecurity)
+                .map(io.kroxylicious.kubernetes.api.v1alpha1.kafkaproxyspec.Security::getFilePermissions)
+                .map(io.kroxylicious.kubernetes.api.v1alpha1.kafkaproxyspec.security.FilePermissions::getPolicy)
+                .map(crdPolicy -> Policy.valueOf(crdPolicy.name()))
+                .orElse(Policy.RELAXED);
     }
 
     private static List<ConfigurationFragment<VirtualCluster>> buildVirtualClusters(Set<String> successfullyBuiltFilterNames, ProxyModel model) {
