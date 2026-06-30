@@ -11,14 +11,25 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.Objects;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+
+import io.kroxylicious.proxy.security.FilePermissionValidator;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /**
  * A reference to the file containing a nonempty plain text password in UTF-8 encoding.  If the password file
  * contains more than one line, only the characters of the first line are taken to be the password,
  * excluding the line ending.  Subsequent lines are ignored.
+ *
+ * <p>File permissions are checked with {@link FilePermissionValidator.Policy#DISABLED} each time the password is read:
+ * a warning is logged if the file is accessible by group or other users, but the read is never
+ * rejected.  Enforcement (rejection) is applied by the runtime at TLS call sites where the
+ * operator-configured policy is available.
  *
  * @param passwordFile file containing the password.
  */
@@ -29,7 +40,9 @@ public record FilePassword(@JsonProperty(required = true) String passwordFile) i
     }
 
     @Override
+    @SuppressFBWarnings(value = "PATH_TRAVERSAL_IN", justification = "Path comes from operator-controlled configuration, not user input.")
     public String getProvidedPassword() {
+        FilePermissionValidator.validate(Path.of(passwordFile), Policy.DISABLED, "password file");
         return readPasswordFile(passwordFile);
     }
 
