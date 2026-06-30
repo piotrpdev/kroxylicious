@@ -70,6 +70,7 @@
                                         <include>io.kroxylicious:kroxylicious-kms-provider-kroxylicious-inmemory</include>
                                         <include>io.kroxylicious:kroxylicious-kms-provider-azure-key-vault-kms</include>
                                         <include>io.kroxylicious:kroxylicious-kms-provider-thales-ciphertrust-manager</include>
+                                        <include>io.kroxylicious:kroxylicious-security</include>
                                     </includes>
                                 </bannedDependencies>
                             </rules>

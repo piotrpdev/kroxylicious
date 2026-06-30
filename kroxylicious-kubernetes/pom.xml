@@ -78,6 +78,7 @@
                                         <include>io.kroxylicious:kroxylicious-certificate-test-support:*:*:test</include>
                                         <include>io.kroxylicious:kroxylicious-simple-transform:*:*:test</include>
                                         <include>io.kroxylicious:kroxylicious-kafka-message-tools:*:*:test</include>
+                                        <include>io.kroxylicious:kroxylicious-security</include>
                                     </includes>
                                 </bannedDependencies>
                             </rules>

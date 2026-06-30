@@ -17,6 +17,7 @@ import javax.net.ssl.KeyManagerFactory;
 
 import io.netty.handler.ssl.SslContextBuilder;
 
+import io.kroxylicious.proxy.config.secret.FilePassword;
 import io.kroxylicious.proxy.config.secret.PasswordProvider;
 import io.kroxylicious.proxy.config.tls.KeyPair;
 import io.kroxylicious.proxy.config.tls.KeyProvider;
@@ -66,7 +67,7 @@ public class NettyKeyProvider {
             public SslContextBuilder visit(KeyPair keyPair) {
                 try {
                     FilePermissionValidator.validate(Path.of(keyPair.privateKeyFile()), policy, "private key");
-                    FilePermissionValidator.validatePasswordProvider(keyPair.keyPasswordProvider(), policy);
+                    validatePasswordProvider(keyPair.keyPasswordProvider());
                     return a.keyManager(new File(keyPair.certificateFile()), new File(keyPair.privateKeyFile()),
                             Optional.ofNullable(keyPair.keyPasswordProvider()).map(PasswordProvider::getProvidedPassword).orElse(null));
                 }
@@ -80,8 +81,8 @@ public class NettyKeyProvider {
             public SslContextBuilder visit(KeyStore keyStore) {
                 try {
                     FilePermissionValidator.validate(Path.of(keyStore.storeFile()), policy, "keystore");
-                    FilePermissionValidator.validatePasswordProvider(keyStore.storePasswordProvider(), policy);
-                    FilePermissionValidator.validatePasswordProvider(keyStore.keyPasswordProvider(), policy);
+                    validatePasswordProvider(keyStore.storePasswordProvider());
+                    validatePasswordProvider(keyStore.keyPasswordProvider());
 
                     var keyStoreFile = new File(keyStore.storeFile());
                     if (keyStore.isPemType()) {
@@ -97,6 +98,13 @@ public class NettyKeyProvider {
                 }
             }
         });
+    }
+
+    @SuppressFBWarnings(value = "PATH_TRAVERSAL_IN", justification = "Paths are provided by the operator via Kroxylicious configuration and may reside anywhere on the filesystem.")
+    private void validatePasswordProvider(@Nullable PasswordProvider provider) {
+        if (provider instanceof FilePassword fp) {
+            FilePermissionValidator.validate(Path.of(fp.passwordFile()), policy, "password file");
+        }
     }
 
     @SuppressFBWarnings("PATH_TRAVERSAL_IN")
