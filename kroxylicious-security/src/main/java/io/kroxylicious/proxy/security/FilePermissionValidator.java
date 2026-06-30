@@ -16,12 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.kroxylicious.proxy.config.secret.FilePassword;
-import io.kroxylicious.proxy.config.secret.PasswordProvider;
-
 import edu.umd.cs.findbugs.annotations.NonNull;
-import edu.umd.cs.findbugs.annotations.Nullable;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /**
  * Validates file permissions for confidential files (passwords, private keys, keystores).
@@ -54,20 +49,6 @@ public class FilePermissionValidator {
     }
 
     private FilePermissionValidator() {
-    }
-
-    /**
-     * Validates file permissions for a {@link PasswordProvider} if it is backed by a file.
-     * No-op for non-file-backed providers such as {@link io.kroxylicious.proxy.config.secret.InlinePassword}.
-     *
-     * @param provider the provider to check; null is silently ignored
-     * @param policy the validation policy to apply
-     */
-    @SuppressFBWarnings(value = "PATH_TRAVERSAL_IN", justification = "Path comes from operator-controlled configuration, not user input.")
-    public static void validatePasswordProvider(@Nullable PasswordProvider provider, @NonNull Policy policy) {
-        if (provider instanceof FilePassword fp) {
-            validate(Path.of(fp.passwordFile()), policy, "password file");
-        }
     }
 
     /**

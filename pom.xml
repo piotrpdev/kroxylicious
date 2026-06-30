@@ -605,6 +605,7 @@
         <module>kroxylicious-kms-tls-support</module>
         <module>kroxylicious-kms-providers</module>
         <module>kroxylicious-bom</module>
+        <module>kroxylicious-security</module>
         <module>kroxylicious-api</module>
         <module>kroxylicious-app</module>
         <module>kroxylicious-krpc-plugin</module>
