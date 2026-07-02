@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
@@ -26,6 +27,7 @@ public class FilePermissionValidator {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(FilePermissionValidator.class);
     private static final AtomicBoolean NON_POSIX_WARNING_LOGGED = new AtomicBoolean(false);
+    private static final Set<Path> DISABLED_POLICY_WARNED = ConcurrentHashMap.newKeySet();
 
     /**
      * Permission validation policy.
@@ -96,13 +98,15 @@ public class FilePermissionValidator {
         String octalPerms = toOctalString(perms);
 
         if (policy == Policy.DISABLED) {
-            LOGGER.atWarn()
-                    .addKeyValue("file", file)
-                    .addKeyValue("permissions", octalPerms)
-                    .addKeyValue("fileType", fileDescription)
-                    .log("Confidential file has permissions that would be rejected by STRICT or RELAXED policy. " +
-                            "File permission checking is currently disabled. " +
-                            "To enforce minimum permissions, set 'security.filePermissions.policy: STRICT'.");
+            if (DISABLED_POLICY_WARNED.add(file.toAbsolutePath().normalize())) {
+                LOGGER.atWarn()
+                        .addKeyValue("file", file)
+                        .addKeyValue("permissions", octalPerms)
+                        .addKeyValue("fileType", fileDescription)
+                        .log("Confidential file has permissions that would be rejected by STRICT or RELAXED policy. " +
+                                "File permission checking is currently disabled. " +
+                                "To enforce minimum permissions, set 'security.filePermissions.policy: STRICT'.");
+            }
         }
         else {
             throw new IllegalStateException(String.format(
