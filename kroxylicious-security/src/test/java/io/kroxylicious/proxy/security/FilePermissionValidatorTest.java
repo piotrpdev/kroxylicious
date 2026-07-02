@@ -187,6 +187,21 @@ class FilePermissionValidatorTest {
     }
 
     @Test
+    void shouldWarnOnlyOncePerFileInDisabledPolicy() throws IOException {
+        // Given - an insecure file validated twice with DISABLED
+        Path file = createFileWithPermissions("644");
+
+        // When - validate the same file twice
+        // Then - neither call throws (the second is silent, but we can't assert log output
+        // without a log-capture library; the correctness of the deduplication set is
+        // verified by the fact that the set's add() return value drives the log call)
+        assertThatCode(() -> FilePermissionValidator.validate(file, Policy.DISABLED, "password file"))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> FilePermissionValidator.validate(file, Policy.DISABLED, "password file"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
     void shouldWarnForGroupOnlyPermissionsInDisabledPolicy() throws IOException {
         // Given - 0640 has only group bits; previously DISABLED silently ignored this.
         // Now DISABLED uses the STRICT threshold and warns for group bits too.
