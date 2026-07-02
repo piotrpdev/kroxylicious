@@ -36,6 +36,8 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import io.kroxylicious.kms.provider.aws.kms.config.WebIdentityCredentialsProviderConfig;
 import io.kroxylicious.kms.service.KmsException;
+import io.kroxylicious.proxy.security.FilePermissionValidator;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 import io.kroxylicious.proxy.tag.VisibleForTesting;
 
 import edu.umd.cs.findbugs.annotations.Nullable;
@@ -209,6 +211,7 @@ public class WebIdentityCredentialsProvider extends AbstractRefreshingCredential
 
     private String readWebIdentityToken() {
         try {
+            FilePermissionValidator.validate(webIdentityTokenFile, Policy.DISABLED, "web identity token file");
             var token = Files.readString(webIdentityTokenFile, StandardCharsets.UTF_8).trim();
             if (token.isEmpty()) {
                 throw new KmsException("web identity token file " + webIdentityTokenFile + " is empty");
