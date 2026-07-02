@@ -11,17 +11,27 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.util.HashSet;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mockito;
+import org.slf4j.Logger;
+import org.slf4j.spi.LoggingEventBuilder;
 
 import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @EnabledOnOs({ OS.LINUX, OS.MAC })
 class FilePermissionValidatorTest {
@@ -163,13 +173,13 @@ class FilePermissionValidatorTest {
                     .isInstanceOf(IllegalStateException.class);
         }
     }
-    
+
     @Test
     void shouldNeverThrowForSecurePermissionsInDisabledPolicy() throws IOException {
         // Given - DISABLED never rejects, even for owner-only files
         for (String perms : new String[]{ "600", "400" }) {
             Path file = createFileWithPermissions(perms);
-            // When / Then - no throw, no warning (file is secure anyway)
+            // When / Then
             assertThatCode(() -> FilePermissionValidator.validate(file, Policy.DISABLED, "test file"))
                     .doesNotThrowAnyException();
         }
@@ -177,38 +187,76 @@ class FilePermissionValidatorTest {
 
     @Test
     void shouldNeverThrowForInsecurePermissionsInDisabledPolicy() throws IOException {
-        // Given - DISABLED warns but never rejects, even for world-readable or group-readable files
+        // Given - DISABLED warns but never rejects
         for (String perms : new String[]{ "777", "666", "644", "640" }) {
             Path file = createFileWithPermissions(perms);
-            // When / Then - no throw (warning is logged, but not assertable without log capture)
+            // When / Then
             assertThatCode(() -> FilePermissionValidator.validate(file, Policy.DISABLED, "test file"))
                     .doesNotThrowAnyException();
         }
     }
 
     @Test
-    void shouldWarnOnlyOncePerFileInDisabledPolicy() throws IOException {
-        // Given - an insecure file validated twice with DISABLED
+    void shouldLogWarningForInsecureFileOnFirstReadInDisabledPolicy() throws IOException {
+        // Given
+        Logger mockLogger = mock(Logger.class);
+        LoggingEventBuilder mockBuilder = mock(LoggingEventBuilder.class, Mockito.RETURNS_SELF);
+        when(mockLogger.atWarn()).thenReturn(mockBuilder);
         Path file = createFileWithPermissions("644");
 
-        // When - validate the same file twice
-        // Then - neither call throws (the second is silent, but we can't assert log output
-        // without a log-capture library; the correctness of the deduplication set is
-        // verified by the fact that the set's add() return value drives the log call)
-        assertThatCode(() -> FilePermissionValidator.validate(file, Policy.DISABLED, "password file"))
-                .doesNotThrowAnyException();
-        assertThatCode(() -> FilePermissionValidator.validate(file, Policy.DISABLED, "password file"))
-                .doesNotThrowAnyException();
+        // When
+        FilePermissionValidator.validate(file, Policy.DISABLED, "private key", mockLogger, new HashSet<>());
+
+        // Then - warning was logged
+        verify(mockLogger).atWarn();
+        verify(mockBuilder).log(anyString());
+    }
+
+    @Test
+    void shouldNotLogWarningForSecureFileInDisabledPolicy() throws IOException {
+        // Given - secure file (owner-only) should not trigger a warning even in DISABLED mode
+        Logger mockLogger = mock(Logger.class);
+        LoggingEventBuilder mockBuilder = mock(LoggingEventBuilder.class, Mockito.RETURNS_SELF);
+        when(mockLogger.atWarn()).thenReturn(mockBuilder);
+        Path file = createFileWithPermissions("600");
+
+        // When
+        FilePermissionValidator.validate(file, Policy.DISABLED, "private key", mockLogger, new HashSet<>());
+
+        // Then - no warning for a file that is already secure
+        verify(mockLogger, never()).atWarn();
+    }
+
+    @Test
+    void shouldWarnOnlyOncePerFileInDisabledPolicy() throws IOException {
+        // Given
+        Logger mockLogger = mock(Logger.class);
+        LoggingEventBuilder mockBuilder = mock(LoggingEventBuilder.class, Mockito.RETURNS_SELF);
+        when(mockLogger.atWarn()).thenReturn(mockBuilder);
+        Path file = createFileWithPermissions("644");
+        Set<Path> warned = new HashSet<>();
+
+        // When - validate the same file twice with the same warned set
+        FilePermissionValidator.validate(file, Policy.DISABLED, "private key", mockLogger, warned);
+        FilePermissionValidator.validate(file, Policy.DISABLED, "private key", mockLogger, warned);
+
+        // Then - warning logged only once
+        verify(mockBuilder, times(1)).log(anyString());
     }
 
     @Test
     void shouldWarnForGroupOnlyPermissionsInDisabledPolicy() throws IOException {
-        // Given - 0640 has only group bits; previously DISABLED silently ignored this.
-        // Now DISABLED uses the STRICT threshold and warns for group bits too.
+        // Given - 0640 has only group bits; DISABLED uses STRICT threshold so warns for these too
+        Logger mockLogger = mock(Logger.class);
+        LoggingEventBuilder mockBuilder = mock(LoggingEventBuilder.class, Mockito.RETURNS_SELF);
+        when(mockLogger.atWarn()).thenReturn(mockBuilder);
         Path file = createFileWithPermissions("640");
-        // When / Then - must not throw (DISABLED never rejects)
-        assertThatCode(() -> FilePermissionValidator.validate(file, Policy.DISABLED, "private key"))
-                .doesNotThrowAnyException();
+
+        // When
+        FilePermissionValidator.validate(file, Policy.DISABLED, "private key", mockLogger, new HashSet<>());
+
+        // Then - warning logged (must not throw)
+        verify(mockBuilder).log(anyString());
     }
 
     @Test

@@ -62,25 +62,35 @@ public class FilePermissionValidator {
      * @throws IllegalStateException if permissions are too permissive and policy is STRICT or RELAXED
      */
     public static void validate(@NonNull Path file, @NonNull Policy policy, @NonNull String fileDescription) {
+        validate(file, policy, fileDescription, LOGGER, DISABLED_POLICY_WARNED);
+    }
+
+    /**
+     * Package-private overload for testing: accepts a specific logger and warned-paths set so
+     * tests can inject a mock logger and a fresh set without sharing global state.
+     */
+    static void validate(@NonNull Path file, @NonNull Policy policy, @NonNull String fileDescription,
+                         @NonNull Logger logger, @NonNull Set<Path> disabledPolicyWarned) {
         try {
             Set<PosixFilePermission> perms = Files.getPosixFilePermissions(file);
-            checkPermissions(file, perms, policy, fileDescription);
+            checkPermissions(file, perms, policy, fileDescription, logger, disabledPolicyWarned);
         }
         catch (UnsupportedOperationException e) {
             if (NON_POSIX_WARNING_LOGGED.compareAndSet(false, true)) {
-                LOGGER.atWarn()
+                logger.atWarn()
                         .log("File permission validation is not supported on this filesystem (POSIX permissions unavailable). Security checks will be skipped.");
             }
         }
         catch (IOException e) {
-            LOGGER.atWarn()
+            logger.atWarn()
                     .addKeyValue("file", file)
                     .addKeyValue("error", e.getMessage())
                     .log("Failed to read file permissions for confidential file");
         }
     }
 
-    private static void checkPermissions(Path file, Set<PosixFilePermission> perms, Policy policy, String fileDescription) {
+    private static void checkPermissions(Path file, Set<PosixFilePermission> perms, Policy policy,
+                                         String fileDescription, Logger logger, Set<Path> disabledPolicyWarned) {
         boolean otherAccess = perms.stream().anyMatch(p -> p.name().startsWith("OTHERS"));
         boolean groupAccess = perms.stream().anyMatch(p -> p.name().startsWith("GROUP"));
 
@@ -98,8 +108,8 @@ public class FilePermissionValidator {
         String octalPerms = toOctalString(perms);
 
         if (policy == Policy.DISABLED) {
-            if (DISABLED_POLICY_WARNED.add(file.toAbsolutePath().normalize())) {
-                LOGGER.atWarn()
+            if (disabledPolicyWarned.add(file.toAbsolutePath().normalize())) {
+                logger.atWarn()
                         .addKeyValue("file", file)
                         .addKeyValue("permissions", octalPerms)
                         .addKeyValue("fileType", fileDescription)
