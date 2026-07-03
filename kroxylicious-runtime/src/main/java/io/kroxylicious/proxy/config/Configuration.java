@@ -25,6 +25,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import io.kroxylicious.proxy.config.admin.ManagementConfiguration;
 import io.kroxylicious.proxy.model.VirtualClusterModel;
+import io.kroxylicious.proxy.security.FilePermissionValidator;
 import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 
 import edu.umd.cs.findbugs.annotations.Nullable;
@@ -90,6 +91,8 @@ public record Configuration(
 
             checkAllNamedFilterAreUsed(filterDefinitions, virtualClusters, defaultFilters);
         }
+
+        FilePermissionValidator.setGlobalPolicy(getEffectiveSecurity().getEffectiveFilePermissions().getEffectivePolicy());
     }
 
     private static void checkNamedFiltersAreDefined(Set<String> filterDefsByName,

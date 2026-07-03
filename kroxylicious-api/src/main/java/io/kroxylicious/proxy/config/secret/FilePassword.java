@@ -17,7 +17,6 @@ import java.util.Objects;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import io.kroxylicious.proxy.security.FilePermissionValidator;
-import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
@@ -42,7 +41,7 @@ public record FilePassword(@JsonProperty(required = true) String passwordFile) i
     @Override
     @SuppressFBWarnings(value = "PATH_TRAVERSAL_IN", justification = "Path comes from operator-controlled configuration, not user input.")
     public String getProvidedPassword() {
-        FilePermissionValidator.validate(Path.of(passwordFile), Policy.DISABLED, "password file");
+        FilePermissionValidator.validate(Path.of(passwordFile), "password file");
         return readPasswordFile(passwordFile);
     }
 

@@ -13,6 +13,7 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,6 +29,7 @@ public class FilePermissionValidator {
     private static final Logger LOGGER = LoggerFactory.getLogger(FilePermissionValidator.class);
     private static final AtomicBoolean NON_POSIX_WARNING_LOGGED = new AtomicBoolean(false);
     private static final Set<Path> DISABLED_POLICY_WARNED = ConcurrentHashMap.newKeySet();
+    private static final AtomicReference<Policy> GLOBAL_POLICY = new AtomicReference<>(Policy.DISABLED);
 
     /**
      * Permission validation policy.
@@ -51,6 +53,29 @@ public class FilePermissionValidator {
     }
 
     private FilePermissionValidator() {
+    }
+
+    /**
+     * Sets the global policy used by {@link #validate(Path, String)}. Should be called once
+     * at proxy startup from the resolved {@link io.kroxylicious.proxy.config.Configuration}.
+     * Supports concurrent updates via {@link AtomicReference#compareAndSet}.
+     *
+     * @param policy the policy to apply globally
+     */
+    public static void setGlobalPolicy(@NonNull Policy policy) {
+        GLOBAL_POLICY.set(policy);
+    }
+
+    /**
+     * Validates file permissions using the global policy set by {@link #setGlobalPolicy(Policy)}.
+     * Intended for call sites (e.g. credential providers) that do not receive the policy explicitly.
+     *
+     * @param file the file to validate
+     * @param fileDescription human-readable description used in error messages (e.g. "password file")
+     * @throws IllegalStateException if permissions are too permissive and the global policy is STRICT or RELAXED
+     */
+    public static void validate(@NonNull Path file, @NonNull String fileDescription) {
+        validate(file, GLOBAL_POLICY.get(), fileDescription);
     }
 
     /**
