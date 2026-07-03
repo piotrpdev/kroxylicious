@@ -35,7 +35,6 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.kroxylicious.kms.provider.aws.kms.config.PodIdentityCredentialsProviderConfig;
 import io.kroxylicious.kms.service.KmsException;
 import io.kroxylicious.proxy.security.FilePermissionValidator;
-import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 import io.kroxylicious.proxy.tag.VisibleForTesting;
 
 /**
@@ -157,7 +156,7 @@ public class PodIdentityCredentialsProvider extends AbstractRefreshingCredential
 
     private String readAuthorizationToken() {
         try {
-            FilePermissionValidator.validate(authorizationTokenFile, Policy.DISABLED, "pod identity authorization token file");
+            FilePermissionValidator.validate(authorizationTokenFile, "pod identity authorization token file");
             var token = Files.readString(authorizationTokenFile, StandardCharsets.UTF_8).trim();
             if (token.isEmpty()) {
                 throw new KmsException("Pod Identity authorization token file " + authorizationTokenFile + " is empty");
