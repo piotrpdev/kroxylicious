@@ -30,6 +30,7 @@ import io.kroxylicious.proxy.internal.routing.DynamicRouting;
 import io.kroxylicious.proxy.internal.routing.RouteDescriptor;
 import io.kroxylicious.proxy.internal.routing.RoutingModel;
 import io.kroxylicious.proxy.model.VirtualClusterModel;
+import io.kroxylicious.proxy.security.FilePermissionValidator;
 import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 
 import edu.umd.cs.findbugs.annotations.Nullable;
@@ -100,6 +101,8 @@ public record Configuration(
 
         validateRouterDefinitions(routerDefinitions, targetClusterNames, filterDefsByName);
         validateVirtualClusterReceivers(virtualClusters, targetClusterNames, routerDefinitions);
+
+        FilePermissionValidator.setGlobalPolicy(getEffectiveSecurity().getEffectiveFilePermissions().getEffectivePolicy());
 
         if (filterDefinitions != null) {
             checkAllNamedFilterAreUsed(filterDefinitions, virtualClusters, defaultFilters, routerDefinitions);
