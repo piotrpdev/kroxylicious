@@ -7,7 +7,20 @@ Format `<github issue/pr number>: <short description>`.
 
 ## SNAPSHOT
 
+* [#1038](https://github.com/kroxylicious/kroxylicious/issues/1038): feat(security): enforce minimum file permissions on confidential files.
 * [#933](https://github.com/kroxylicious/kroxylicious/issues/933): feat(pem-support): Support PEM format key material in the KMS integrations.
+
+### Changes, deprecations and removals
+
+* [#1038](https://github.com/kroxylicious/kroxylicious/issues/1038): Kroxylicious now validates that confidential files (TLS private keys, keystores, truststores, password files, KMS credential files, and AWS IRSA/Pod Identity token files) are not excessively permissive before reading them.
+  * Control enforcement via `security.filePermissions.policy` in the proxy configuration:
+    * `STRICT` (owner-only access, like SSH)
+    * `RELAXED` (group-readable, suitable for Kubernetes `fsGroup` deployments)
+    * `DISABLED` (warn only).
+      * This is the default for backward compatibility - existing deployments with world-readable files continue to work but emit warnings.
+  * **Behaviour change**: `FilePassword.getProvidedPassword()` now validates file permissions before reading; with a non-`DISABLED` policy it can throw `IllegalStateException` if the file has group or other read bits set.
+    * The Kubernetes operator defaults to `RELAXED` and mounts all secret volumes with `defaultMode: 0440`
+    * The `KafkaProxy` CRD exposes `spec.security.filePermissions.policy` (default `RELAXED`) to override the policy for operator-managed deployments.
 
 ## 0.22.0
 
