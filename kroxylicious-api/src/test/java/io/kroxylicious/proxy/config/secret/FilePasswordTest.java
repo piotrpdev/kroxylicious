@@ -9,6 +9,7 @@ package io.kroxylicious.proxy.config.secret;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.nio.file.Files;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -16,9 +17,14 @@ import org.assertj.core.api.Condition;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+
+import io.kroxylicious.proxy.security.FilePermissionValidator;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -35,6 +41,7 @@ class FilePasswordTest {
 
     @AfterEach
     void afterEach() {
+        FilePermissionValidator.setGlobalPolicy(Policy.DISABLED);
         if (file != null && Files.exists(file.toPath()) && !file.delete()) {
             throw new IllegalStateException("Could not delete temp file: " + file.getAbsolutePath());
         }
@@ -77,5 +84,33 @@ class FilePasswordTest {
         assertThatThrownBy(provider::getProvidedPassword)
                 .hasMessageContaining(path)
                 .hasRootCauseInstanceOf(FileNotFoundException.class);
+    }
+
+    @Test
+    @EnabledOnOs({ OS.LINUX, OS.MAC })
+    void strictGlobalPolicyRejectsInsecurePasswordFile() throws Exception {
+        // Given - a password file with group-read permissions and global policy set to STRICT
+        Files.writeString(file.toPath(), "secret");
+        Files.setPosixFilePermissions(file.toPath(), PosixFilePermissions.fromString("rw-r-----"));
+        FilePermissionValidator.setGlobalPolicy(Policy.STRICT);
+
+        // When / Then - getProvidedPassword() throws because the file is too open
+        var provider = new FilePassword(file.getAbsolutePath());
+        assertThatThrownBy(provider::getProvidedPassword)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("too open");
+    }
+
+    @Test
+    @EnabledOnOs({ OS.LINUX, OS.MAC })
+    void strictGlobalPolicyAcceptsOwnerOnlyPasswordFile() throws Exception {
+        // Given - a password file with owner-only permissions and global policy set to STRICT
+        Files.writeString(file.toPath(), "secret");
+        Files.setPosixFilePermissions(file.toPath(), PosixFilePermissions.fromString("rw-------"));
+        FilePermissionValidator.setGlobalPolicy(Policy.STRICT);
+
+        // When / Then - no exception thrown; password is read successfully
+        var provider = new FilePassword(file.getAbsolutePath());
+        assertThat(provider.getProvidedPassword()).isEqualTo("secret");
     }
 }
