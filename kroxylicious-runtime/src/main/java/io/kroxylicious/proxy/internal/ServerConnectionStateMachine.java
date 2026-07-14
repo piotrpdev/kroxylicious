@@ -330,7 +330,7 @@ class ServerConnectionStateMachine {
                             .ifPresent(to -> {
                                 throw new IllegalConfigurationException("Cannot apply trust options " + to + " to upstream (client) TLS.)");
                             });
-                    VirtualClusterModel.configureTrustProvider(tls, virtualCluster.getFilePermissionPolicy()).apply(sslContextBuilder);
+                    VirtualClusterModel.configureTrustProvider(tls).apply(sslContextBuilder);
                 });
             }
 

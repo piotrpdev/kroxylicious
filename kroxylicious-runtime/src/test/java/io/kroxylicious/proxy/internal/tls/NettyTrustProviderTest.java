@@ -14,6 +14,7 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.security.UnrecoverableKeyException;
 import java.util.stream.Stream;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -28,11 +29,12 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.kroxylicious.proxy.config.secret.FilePassword;
 import io.kroxylicious.proxy.config.secret.PasswordProvider;
 import io.kroxylicious.proxy.config.tls.InsecureTls;
-import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 import io.kroxylicious.proxy.config.tls.PlatformTrustProvider;
 import io.kroxylicious.proxy.config.tls.ServerOptions;
 import io.kroxylicious.proxy.config.tls.TlsClientAuth;
 import io.kroxylicious.proxy.config.tls.TrustStore;
+import io.kroxylicious.proxy.security.FilePermissionValidator;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -40,6 +42,11 @@ import static org.junit.jupiter.params.provider.Arguments.argumentSet;
 
 class NettyTrustProviderTest {
     private final SslContextBuilder sslContextBuilder = SslContextBuilder.forClient();
+
+    @AfterEach
+    void afterEach() {
+        FilePermissionValidator.setGlobalPolicy(Policy.DISABLED);
+    }
 
     public static Stream<Arguments> trustStoreTypes() {
         return Stream.of(
@@ -129,9 +136,9 @@ class NettyTrustProviderTest {
         Path insecureTruststore = tmp.resolve("client.jks");
         Files.copy(Path.of(TlsTestConstants.getResourceLocationOnFilesystem("client.jks")), insecureTruststore);
         Files.setPosixFilePermissions(insecureTruststore, PosixFilePermissions.fromString("rw-r--r--"));
+        FilePermissionValidator.setGlobalPolicy(Policy.STRICT);
         var trustStore = new NettyTrustProvider(
-                new TrustStore(insecureTruststore.toString(), TlsTestConstants.STOREPASS, null, null),
-                Policy.STRICT);
+                new TrustStore(insecureTruststore.toString(), TlsTestConstants.STOREPASS, null, null));
 
         // When / Then
         assertThatCode(() -> trustStore.apply(sslContextBuilder))
@@ -152,10 +159,10 @@ class NettyTrustProviderTest {
         Path insecurePassFile = tmp.resolve("storepass.txt");
         Files.writeString(insecurePassFile, TlsTestConstants.STOREPASS.getProvidedPassword());
         Files.setPosixFilePermissions(insecurePassFile, PosixFilePermissions.fromString("rw-r-----"));
+        FilePermissionValidator.setGlobalPolicy(Policy.STRICT);
         var trustStore = new NettyTrustProvider(
                 new TrustStore(secureTruststore.toString(),
-                        new FilePassword(insecurePassFile.toString()), null, null),
-                Policy.STRICT);
+                        new FilePassword(insecurePassFile.toString()), null, null));
 
         // When / Then
         assertThatCode(() -> trustStore.apply(sslContextBuilder))

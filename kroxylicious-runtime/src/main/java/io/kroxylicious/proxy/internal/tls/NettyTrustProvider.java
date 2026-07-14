@@ -29,7 +29,6 @@ import io.kroxylicious.proxy.config.tls.TrustProvider;
 import io.kroxylicious.proxy.config.tls.TrustProviderVisitor;
 import io.kroxylicious.proxy.config.tls.TrustStore;
 import io.kroxylicious.proxy.security.FilePermissionValidator;
-import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 
 import edu.umd.cs.findbugs.annotations.Nullable;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -38,15 +37,9 @@ public class NettyTrustProvider {
 
     public static final String HTTPS_HOSTNAME_VERIFICATION = "HTTPS";
     private final TrustProvider trustProvider;
-    private final Policy policy;
 
     public NettyTrustProvider(TrustProvider trustProvider) {
-        this(trustProvider, Policy.DISABLED);
-    }
-
-    public NettyTrustProvider(TrustProvider trustProvider, Policy policy) {
         this.trustProvider = trustProvider;
-        this.policy = policy;
     }
 
     public SslContextBuilder apply(SslContextBuilder builder) {
@@ -55,7 +48,7 @@ public class NettyTrustProvider {
             @Override
             public SslContextBuilder visit(TrustStore trustStore) {
                 try {
-                    FilePermissionValidator.validate(Path.of(trustStore.storeFile()), policy, "truststore");
+                    FilePermissionValidator.validate(Path.of(trustStore.storeFile()), "truststore");
                     validatePasswordProvider(trustStore.storePasswordProvider());
 
                     enableHostnameVerification();
@@ -132,7 +125,7 @@ public class NettyTrustProvider {
     @SuppressFBWarnings(value = "PATH_TRAVERSAL_IN", justification = "Paths are provided by the operator via Kroxylicious configuration and may reside anywhere on the filesystem.")
     private void validatePasswordProvider(@Nullable PasswordProvider provider) {
         if (provider instanceof FilePassword fp) {
-            FilePermissionValidator.validate(java.nio.file.Path.of(fp.passwordFile()), policy, "password file");
+            FilePermissionValidator.validate(java.nio.file.Path.of(fp.passwordFile()), "password file");
         }
     }
 
