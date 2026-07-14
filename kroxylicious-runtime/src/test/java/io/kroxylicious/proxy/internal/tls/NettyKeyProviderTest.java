@@ -18,6 +18,7 @@ import java.util.stream.Stream;
 import javax.crypto.BadPaddingException;
 
 import org.assertj.core.api.AbstractThrowableAssert;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -32,6 +33,7 @@ import io.kroxylicious.proxy.config.secret.InlinePassword;
 import io.kroxylicious.proxy.config.secret.PasswordProvider;
 import io.kroxylicious.proxy.config.tls.KeyPair;
 import io.kroxylicious.proxy.config.tls.KeyStore;
+import io.kroxylicious.proxy.security.FilePermissionValidator;
 import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 
 import static io.kroxylicious.proxy.internal.tls.TlsTestConstants.BADPASS;
@@ -48,6 +50,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 class NettyKeyProviderTest {
+
+    @AfterEach
+    void afterEach() {
+        FilePermissionValidator.setGlobalPolicy(Policy.DISABLED);
+    }
 
     private static Stream<Arguments> withKeyStore() {
         return Stream.of(
@@ -220,9 +227,9 @@ class NettyKeyProviderTest {
         Path insecureKey = tmp.resolve("server.key");
         Files.copy(Path.of(TlsTestConstants.getResourceLocationOnFilesystem("server.key")), insecureKey);
         Files.setPosixFilePermissions(insecureKey, PosixFilePermissions.fromString("rw-r-----"));
+        FilePermissionValidator.setGlobalPolicy(Policy.STRICT);
         var keyPair = new NettyKeyProvider(
-                new KeyPair(insecureKey.toString(), TlsTestConstants.getResourceLocationOnFilesystem("server.crt"), null),
-                Policy.STRICT);
+                new KeyPair(insecureKey.toString(), TlsTestConstants.getResourceLocationOnFilesystem("server.crt"), null));
 
         // When / Then - SslContextBuildException wrapping the permission IllegalStateException
         assertThatCode(keyPair::forServer)
@@ -240,7 +247,8 @@ class NettyKeyProviderTest {
         Path insecureKeystore = tmp.resolve("server.jks");
         Files.copy(Path.of(TlsTestConstants.getResourceLocationOnFilesystem("server.jks")), insecureKeystore);
         Files.setPosixFilePermissions(insecureKeystore, PosixFilePermissions.fromString("rw-r--r--"));
-        var keyStore = new NettyKeyProvider(new KeyStore(insecureKeystore.toString(), TlsTestConstants.STOREPASS, null, null), Policy.STRICT);
+        FilePermissionValidator.setGlobalPolicy(Policy.STRICT);
+        var keyStore = new NettyKeyProvider(new KeyStore(insecureKeystore.toString(), TlsTestConstants.STOREPASS, null, null));
 
         // When / Then
         assertThatCode(keyStore::forServer)
@@ -262,11 +270,10 @@ class NettyKeyProviderTest {
         Path insecurePassFile = tmp.resolve("password.txt");
         Files.writeString(insecurePassFile, TlsTestConstants.STOREPASS.getProvidedPassword());
         Files.setPosixFilePermissions(insecurePassFile, PosixFilePermissions.fromString("rw-r-----"));
-
+        FilePermissionValidator.setGlobalPolicy(Policy.STRICT);
         var keyStore = new NettyKeyProvider(
                 new KeyStore(secureKeystore.toString(),
-                        new FilePassword(insecurePassFile.toString()), null, null),
-                Policy.STRICT);
+                        new FilePassword(insecurePassFile.toString()), null, null));
 
         // When / Then - the password file permission check fires before the keystore is opened
         assertThatCode(keyStore::forServer)
@@ -284,9 +291,9 @@ class NettyKeyProviderTest {
         Path secureKey = tmp.resolve("server.key");
         Files.copy(Path.of(TlsTestConstants.getResourceLocationOnFilesystem("server.key")), secureKey);
         Files.setPosixFilePermissions(secureKey, PosixFilePermissions.fromString("rw-------"));
+        FilePermissionValidator.setGlobalPolicy(Policy.STRICT);
         var keyPair = new NettyKeyProvider(
-                new KeyPair(secureKey.toString(), TlsTestConstants.getResourceLocationOnFilesystem("server.crt"), null),
-                Policy.STRICT);
+                new KeyPair(secureKey.toString(), TlsTestConstants.getResourceLocationOnFilesystem("server.crt"), null));
 
         // When / Then - no permission exception; other exceptions (if any) are unrelated
         assertThatCode(keyPair::forServer)

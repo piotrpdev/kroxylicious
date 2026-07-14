@@ -33,7 +33,6 @@ import io.kroxylicious.proxy.internal.routing.RoutingModel;
 import io.kroxylicious.proxy.internal.routing.UpstreamClusterModel;
 import io.kroxylicious.proxy.model.VirtualClusterModel;
 import io.kroxylicious.proxy.security.FilePermissionValidator;
-import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 
 import edu.umd.cs.findbugs.annotations.Nullable;
 
@@ -268,8 +267,7 @@ public record Configuration(
                                                       Map<String, NamedFilterDefinition> filterDefinitionsByName,
                                                       Map<String, RouterDefinition> routersByName,
                                                       Map<String, ClusterDefinition> clustersByName,
-                                                      PluginFactoryRegistry pfr,
-                                                      Policy filePermissionPolicy) {
+                                                      PluginFactoryRegistry pfr) {
         RoutingModel routing;
         if (virtualCluster.router() != null) {
             var routeDescriptors = resolveRouteDescriptors(virtualCluster, filterDefinitionsByName, routersByName, clustersByName);
@@ -295,8 +293,7 @@ public record Configuration(
                 virtualCluster.topicNameCacheConfig(),
                 virtualCluster.subjectBuilder(),
                 virtualCluster.effectiveDrainTimeout(),
-                pfr,
-                filePermissionPolicy);
+                pfr);
 
         addGateways(virtualCluster.gateways(), virtualClusterModel);
 
@@ -391,14 +388,12 @@ public record Configuration(
         var routersByName = buildDefinitionsByName(routerDefinitions, RouterDefinition::name);
         var clustersByName = buildDefinitionsByName(clusterDefinitions, ClusterDefinition::name);
 
-        Policy policy = getEffectiveSecurity().getEffectiveFilePermissions().getEffectivePolicy();
-
         return virtualClusters.stream()
                 .map(virtualCluster -> {
                     List<NamedFilterDefinition> filterDefinitions = namedFilterDefinitionsForCluster(
                             filterDefinitionsByName, virtualCluster);
                     return toVirtualClusterModel(virtualCluster, filterDefinitions,
-                            filterDefinitionsByName, routersByName, clustersByName, pfr, policy);
+                            filterDefinitionsByName, routersByName, clustersByName, pfr);
                 })
                 .toList();
     }
@@ -417,14 +412,12 @@ public record Configuration(
         var routersByName = buildDefinitionsByName(routerDefinitions, RouterDefinition::name);
         var clustersByName = buildDefinitionsByName(clusterDefinitions, ClusterDefinition::name);
 
-        Policy policy = getEffectiveSecurity().getEffectiveFilePermissions().getEffectivePolicy();
-
         return virtualClusters.stream()
                 .filter(virtualCluster -> virtualCluster.name().equals(clusterName))
                 .findFirst()
                 .map(virtualCluster -> {
                     List<NamedFilterDefinition> filterDefinitions = namedFilterDefinitionsForCluster(filterDefinitionsByName, virtualCluster);
-                    return toVirtualClusterModel(virtualCluster, filterDefinitions, filterDefinitionsByName, routersByName, clustersByName, pfr, policy);
+                    return toVirtualClusterModel(virtualCluster, filterDefinitions, filterDefinitionsByName, routersByName, clustersByName, pfr);
                 })
                 .orElseThrow(() -> new IllegalArgumentException("No virtual cluster named '" + clusterName + "' in this configuration"));
     }
