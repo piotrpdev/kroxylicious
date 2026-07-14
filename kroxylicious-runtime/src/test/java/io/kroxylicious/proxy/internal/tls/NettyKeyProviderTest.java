@@ -7,6 +7,9 @@
 package io.kroxylicious.proxy.internal.tls;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.KeyException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
@@ -16,15 +19,20 @@ import javax.crypto.BadPaddingException;
 
 import org.assertj.core.api.AbstractThrowableAssert;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import io.kroxylicious.proxy.config.secret.FilePassword;
 import io.kroxylicious.proxy.config.secret.InlinePassword;
 import io.kroxylicious.proxy.config.secret.PasswordProvider;
 import io.kroxylicious.proxy.config.tls.KeyPair;
 import io.kroxylicious.proxy.config.tls.KeyStore;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 
 import static io.kroxylicious.proxy.internal.tls.TlsTestConstants.BADPASS;
 import static io.kroxylicious.proxy.internal.tls.TlsTestConstants.JKS;
@@ -203,6 +211,86 @@ class NettyKeyProviderTest {
         var sslContext = keyPair.forClient().build();
         assertThat(sslContext).isNotNull();
         assertThat(sslContext.isClient()).isTrue();
+    }
+
+    @Test
+    @EnabledOnOs({ OS.LINUX, OS.MAC })
+    void strictPolicyRejectsInsecurePrivateKeyFile(@TempDir Path tmp) throws IOException {
+        // Given - a private key file with group-read permissions (0640)
+        Path insecureKey = tmp.resolve("server.key");
+        Files.copy(Path.of(TlsTestConstants.getResourceLocationOnFilesystem("server.key")), insecureKey);
+        Files.setPosixFilePermissions(insecureKey, PosixFilePermissions.fromString("rw-r-----"));
+        var keyPair = new NettyKeyProvider(
+                new KeyPair(insecureKey.toString(), TlsTestConstants.getResourceLocationOnFilesystem("server.crt"), null),
+                Policy.STRICT);
+
+        // When / Then - SslContextBuildException wrapping the permission IllegalStateException
+        assertThatCode(keyPair::forServer)
+                .hasMessageContaining("Error building SSLContext")
+                .hasRootCauseInstanceOf(IllegalStateException.class)
+                .rootCause()
+                .hasMessageContaining("too open")
+                .hasMessageContaining("0640");
+    }
+
+    @Test
+    @EnabledOnOs({ OS.LINUX, OS.MAC })
+    void strictPolicyRejectsInsecureKeystoreFile(@TempDir Path tmp) throws IOException {
+        // Given - a keystore file with world-read permissions (0644)
+        Path insecureKeystore = tmp.resolve("server.jks");
+        Files.copy(Path.of(TlsTestConstants.getResourceLocationOnFilesystem("server.jks")), insecureKeystore);
+        Files.setPosixFilePermissions(insecureKeystore, PosixFilePermissions.fromString("rw-r--r--"));
+        var keyStore = new NettyKeyProvider(new KeyStore(insecureKeystore.toString(), TlsTestConstants.STOREPASS, null, null), Policy.STRICT);
+
+        // When / Then
+        assertThatCode(keyStore::forServer)
+                .hasMessageContaining("Error building SSLContext")
+                .hasRootCauseInstanceOf(IllegalStateException.class)
+                .rootCause()
+                .hasMessageContaining("too open")
+                .hasMessageContaining("0644");
+    }
+
+    @Test
+    @EnabledOnOs({ OS.LINUX, OS.MAC })
+    void strictPolicyRejectsInsecurePasswordFile(@TempDir Path tmp) throws IOException {
+        // Given - a keystore with secure permissions and a FilePassword pointing to a group-readable file (0640)
+        Path secureKeystore = tmp.resolve("server.jks");
+        Files.copy(Path.of(TlsTestConstants.getResourceLocationOnFilesystem("server.jks")), secureKeystore);
+        Files.setPosixFilePermissions(secureKeystore, PosixFilePermissions.fromString("rw-------"));
+
+        Path insecurePassFile = tmp.resolve("password.txt");
+        Files.writeString(insecurePassFile, TlsTestConstants.STOREPASS.getProvidedPassword());
+        Files.setPosixFilePermissions(insecurePassFile, PosixFilePermissions.fromString("rw-r-----"));
+
+        var keyStore = new NettyKeyProvider(
+                new KeyStore(secureKeystore.toString(),
+                        new FilePassword(insecurePassFile.toString()), null, null),
+                Policy.STRICT);
+
+        // When / Then - the password file permission check fires before the keystore is opened
+        assertThatCode(keyStore::forServer)
+                .hasMessageContaining("Error building SSLContext")
+                .hasRootCauseInstanceOf(IllegalStateException.class)
+                .rootCause()
+                .hasMessageContaining("too open")
+                .hasMessageContaining("password file");
+    }
+
+    @Test
+    @EnabledOnOs({ OS.LINUX, OS.MAC })
+    void strictPolicyAcceptsOwnerOnlyFiles(@TempDir Path tmp) throws IOException {
+        // Given - private key copied to a 0600 temp file (owner-only, STRICT passes)
+        Path secureKey = tmp.resolve("server.key");
+        Files.copy(Path.of(TlsTestConstants.getResourceLocationOnFilesystem("server.key")), secureKey);
+        Files.setPosixFilePermissions(secureKey, PosixFilePermissions.fromString("rw-------"));
+        var keyPair = new NettyKeyProvider(
+                new KeyPair(secureKey.toString(), TlsTestConstants.getResourceLocationOnFilesystem("server.crt"), null),
+                Policy.STRICT);
+
+        // When / Then - no permission exception; other exceptions (if any) are unrelated
+        assertThatCode(keyPair::forServer)
+                .doesNotThrowAnyException();
     }
 
     private AbstractThrowableAssert<?, ? extends Throwable> doFailingKeyPairTest(String privateKeyFile, String certificateFile,

@@ -7,10 +7,17 @@
 package io.kroxylicious.proxy.internal.tls;
 
 import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.UnrecoverableKeyException;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -18,8 +25,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.SslContextBuilder;
 
+import io.kroxylicious.proxy.config.secret.FilePassword;
 import io.kroxylicious.proxy.config.secret.PasswordProvider;
 import io.kroxylicious.proxy.config.tls.InsecureTls;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 import io.kroxylicious.proxy.config.tls.PlatformTrustProvider;
 import io.kroxylicious.proxy.config.tls.ServerOptions;
 import io.kroxylicious.proxy.config.tls.TlsClientAuth;
@@ -111,6 +120,50 @@ class NettyTrustProviderTest {
 
         // Then
         assertThat(sslContextBuilder).extracting("endpointIdentificationAlgorithm").isEqualTo("HTTPS");
+    }
+
+    @Test
+    @EnabledOnOs({ OS.LINUX, OS.MAC })
+    void strictPolicyRejectsInsecureTruststoreFile(@TempDir Path tmp) throws IOException {
+        // Given - a JKS truststore with world-readable permissions (0644)
+        Path insecureTruststore = tmp.resolve("client.jks");
+        Files.copy(Path.of(TlsTestConstants.getResourceLocationOnFilesystem("client.jks")), insecureTruststore);
+        Files.setPosixFilePermissions(insecureTruststore, PosixFilePermissions.fromString("rw-r--r--"));
+        var trustStore = new NettyTrustProvider(
+                new TrustStore(insecureTruststore.toString(), TlsTestConstants.STOREPASS, null, null),
+                Policy.STRICT);
+
+        // When / Then
+        assertThatCode(() -> trustStore.apply(sslContextBuilder))
+                .hasMessageContaining("Error building SSLContext")
+                .hasRootCauseInstanceOf(IllegalStateException.class)
+                .rootCause()
+                .hasMessageContaining("too open")
+                .hasMessageContaining("0644");
+    }
+
+    @Test
+    @EnabledOnOs({ OS.LINUX, OS.MAC })
+    void strictPolicyRejectsInsecureTruststorePasswordFile(@TempDir Path tmp) throws IOException {
+        // Given - a truststore with secure permissions and a password file with group-read permissions (0640)
+        Path secureTruststore = tmp.resolve("client.jks");
+        Files.copy(Path.of(TlsTestConstants.getResourceLocationOnFilesystem("client.jks")), secureTruststore);
+        Files.setPosixFilePermissions(secureTruststore, PosixFilePermissions.fromString("rw-------"));
+        Path insecurePassFile = tmp.resolve("storepass.txt");
+        Files.writeString(insecurePassFile, TlsTestConstants.STOREPASS.getProvidedPassword());
+        Files.setPosixFilePermissions(insecurePassFile, PosixFilePermissions.fromString("rw-r-----"));
+        var trustStore = new NettyTrustProvider(
+                new TrustStore(secureTruststore.toString(),
+                        new FilePassword(insecurePassFile.toString()), null, null),
+                Policy.STRICT);
+
+        // When / Then
+        assertThatCode(() -> trustStore.apply(sslContextBuilder))
+                .hasMessageContaining("Error building SSLContext")
+                .hasRootCauseInstanceOf(IllegalStateException.class)
+                .rootCause()
+                .hasMessageContaining("too open")
+                .hasMessageContaining("password file");
     }
 
     @Test
