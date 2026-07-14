@@ -11,6 +11,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -23,6 +24,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
@@ -31,6 +34,8 @@ import com.github.tomakehurst.wiremock.client.WireMock;
 import io.kroxylicious.kms.provider.aws.kms.config.PodIdentityCredentialsProviderConfig;
 import io.kroxylicious.kms.provider.aws.kms.credentials.PodIdentityCredentialsProvider.PodIdentityCredentials;
 import io.kroxylicious.kms.service.KmsException;
+import io.kroxylicious.proxy.security.FilePermissionValidator;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
@@ -81,6 +86,7 @@ class PodIdentityCredentialsProviderTest {
     @AfterEach
     void afterEach() {
         agentServer.resetAll();
+        FilePermissionValidator.setGlobalPolicy(Policy.DISABLED);
     }
 
     @Test
@@ -203,6 +209,42 @@ class PodIdentityCredentialsProviderTest {
                     .withThrowableThat()
                     .havingRootCause()
                     .isInstanceOf(IOException.class);
+        }
+    }
+
+    @Test
+    @EnabledOnOs({ OS.LINUX, OS.MAC })
+    void strictPolicyMakesCredentialRefreshFailForInsecureTokenFile() throws IOException {
+        // Given - token file with group-read permissions and STRICT global policy
+        Files.setPosixFilePermissions(tokenFile, PosixFilePermissions.fromString("rw-r-----"));
+        FilePermissionValidator.setGlobalPolicy(Policy.STRICT);
+        var cfg = config(credentialsUri, tokenFile);
+
+        // When - the credential refresh fires (token file has bad permissions)
+        try (var provider = new PodIdentityCredentialsProvider(cfg, emptyEnv, SYSTEM_CLOCK)) {
+            // Then - the future completes exceptionally with a permission violation
+            assertThat(provider.getCredentials())
+                    .failsWithin(Duration.ofSeconds(5))
+                    .withThrowableOfType(Exception.class)
+                    .withCauseInstanceOf(IllegalStateException.class)
+                    .withMessageContaining("too open");
+        }
+    }
+
+    @Test
+    @EnabledOnOs({ OS.LINUX, OS.MAC })
+    void strictPolicyDoesNotAffectCredentialRefreshForSecureTokenFile() throws IOException {
+        // Given - token file with owner-only permissions and STRICT global policy
+        Files.setPosixFilePermissions(tokenFile, PosixFilePermissions.fromString("rw-------"));
+        FilePermissionValidator.setGlobalPolicy(Policy.STRICT);
+        stubAgentSuccess("ASIATESTKEY", "secretValue", "tokenValue", Instant.parse("2099-01-01T00:00:00Z"));
+        var cfg = config(credentialsUri, tokenFile);
+
+        // When / Then - no permission exception; credentials are obtained successfully
+        try (var provider = new PodIdentityCredentialsProvider(cfg, emptyEnv, SYSTEM_CLOCK)) {
+            assertThat(provider.getCredentials())
+                    .succeedsWithin(Duration.ofSeconds(5))
+                    .returns("ASIATESTKEY", PodIdentityCredentials::accessKeyId);
         }
     }
 
