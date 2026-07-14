@@ -25,10 +25,9 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  * contains more than one line, only the characters of the first line are taken to be the password,
  * excluding the line ending.  Subsequent lines are ignored.
  *
- * <p>File permissions are checked with {@link FilePermissionValidator.Policy#DISABLED} each time the password is read:
- * a warning is logged if the file is accessible by group or other users, but the read is never
- * rejected.  Enforcement (rejection) is applied by the runtime at TLS call sites where the
- * operator-configured policy is available.
+ * <p>File permissions are checked using the globally configured policy (see
+ * {@link FilePermissionValidator#setGlobalPolicy(FilePermissionValidator.Policy)}).
+ * An {@link IllegalStateException} is thrown if the file permissions are too open.
  *
  * @param passwordFile file containing the password.
  */
