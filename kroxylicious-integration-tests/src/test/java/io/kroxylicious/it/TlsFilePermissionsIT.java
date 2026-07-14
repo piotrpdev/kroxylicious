@@ -208,6 +208,90 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
     }
 
     @Test
+    void relaxedPolicyAcceptsGroupReadableUpstreamTruststoreFile() throws Exception {
+        // Given - broker truststore with owner+group read (0440); the Kubernetes fsGroup scenario for upstream TLS
+        var brokerTruststore = (String) tlsCluster.getKafkaClientConfiguration().get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
+        var brokerTruststorePassword = (String) tlsCluster.getKafkaClientConfiguration().get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+
+        Path groupReadableTruststore = certsDirectory.resolve("broker-trust.jks");
+        Files.copy(Path.of(brokerTruststore), groupReadableTruststore);
+        Files.setPosixFilePermissions(groupReadableTruststore, PosixFilePermissions.fromString("r--r-----"));
+
+        // @formatter:off
+        var builder = KroxyliciousConfigUtils.baseConfigurationBuilder()
+                .withSecurity(new SecurityConfig(new FilePermissionConfig(Policy.RELAXED)))
+                .addNewClusterDefinition()
+                    .withName(TARGET_CLUSTER_NAME)
+                    .withBootstrapServers(tlsCluster.getBootstrapServers())
+                    .withNewTls()
+                        .withNewTrustStoreTrust()
+                            .withStoreFile(groupReadableTruststore.toString())
+                            .withNewInlinePasswordStoreProvider(brokerTruststorePassword)
+                        .endTrustStoreTrust()
+                    .endTls()
+                .endClusterDefinition()
+                .addToVirtualClusters(new VirtualClusterBuilder()
+                        .withName(VIRTUAL_CLUSTER_NAME)
+                        .withTarget(new RouteTarget(TARGET_CLUSTER_NAME, null))
+                        .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS).build())
+                        .build());
+        // @formatter:on
+
+        // When / Then - proxy starts successfully; group-readable upstream truststore accepted by RELAXED
+        try (var tester = kroxyliciousTester(builder);
+                var admin = tester.admin(VIRTUAL_CLUSTER_NAME)) {
+            assertThat(admin.describeCluster().nodes()).succeedsWithin(10, TimeUnit.SECONDS).isNotNull();
+        }
+    }
+
+    @Test
+    void strictPolicyRejectsStartupWhenUpstreamTruststorePasswordFileIsInsecure() throws Exception {
+        // Given - secure upstream truststore (0600) but its FilePassword-backed password file is group-readable (0640)
+        var brokerTruststore = (String) tlsCluster.getKafkaClientConfiguration().get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
+        var brokerTruststorePassword = (String) tlsCluster.getKafkaClientConfiguration().get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+
+        Path secureTruststore = certsDirectory.resolve("broker-trust.jks");
+        Files.copy(Path.of(brokerTruststore), secureTruststore);
+        Files.setPosixFilePermissions(secureTruststore, PosixFilePermissions.fromString("rw-------"));
+
+        Path insecurePassFile = certsDirectory.resolve("truststore-password.txt");
+        Files.writeString(insecurePassFile, brokerTruststorePassword);
+        Files.setPosixFilePermissions(insecurePassFile, PosixFilePermissions.fromString("rw-r-----"));
+
+        // @formatter:off
+        var builder = KroxyliciousConfigUtils.baseConfigurationBuilder()
+                .withSecurity(new SecurityConfig(new FilePermissionConfig(Policy.STRICT)))
+                .addNewClusterDefinition()
+                    .withName(TARGET_CLUSTER_NAME)
+                    .withBootstrapServers(tlsCluster.getBootstrapServers())
+                    .withNewTls()
+                        .withNewTrustStoreTrust()
+                            .withStoreFile(secureTruststore.toString())
+                            .withStorePasswordProvider(new FilePassword(insecurePassFile.toString()))
+                        .endTrustStoreTrust()
+                    .endTls()
+                .endClusterDefinition()
+                .addToVirtualClusters(new VirtualClusterBuilder()
+                        .withName(VIRTUAL_CLUSTER_NAME)
+                        .withTarget(new RouteTarget(TARGET_CLUSTER_NAME, null))
+                        .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS).build())
+                        .build());
+        // @formatter:on
+
+        // When / Then - proxy fails to start; upstream truststore password file permission violation
+        assertThatThrownBy(() -> {
+            try (var ignored = kroxyliciousTester(builder)) {
+                return; // suppress empty-try-block warning; exception is expected before body runs
+            }
+        })
+                .isInstanceOf(SslContextBuildException.class)
+                .rootCause()
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("too open")
+                .hasMessageContaining("password file");
+    }
+
+    @Test
     void relaxedPolicyAcceptsGroupReadableKeystoreFile() throws Exception {
         // Given - keystore with owner+group read (0440); the Kubernetes fsGroup scenario
         Path groupReadableKeystore = certsDirectory.resolve("group-readable.p12");
