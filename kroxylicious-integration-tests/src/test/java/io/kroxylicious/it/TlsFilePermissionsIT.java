@@ -386,6 +386,38 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
         }
     }
 
+    @Test
+    void defaultPolicyPermitsStartupWithInsecureKeystoreFile() throws Exception {
+        // Given - keystore with world-readable permissions (0644) and no security config (the default is DISABLED)
+        // TODO: when the default policy changes from DISABLED to STRICT, update/remove this test.
+        Path insecureKeystore = certsDirectory.resolve("insecure.p12");
+        Files.copy(Path.of(downstreamCertificateGenerator.getKeyStoreLocation()), insecureKeystore);
+        Files.setPosixFilePermissions(insecureKeystore, PosixFilePermissions.fromString("rw-r--r--"));
+
+        // @formatter:off
+        var builder = KroxyliciousConfigUtils.baseConfigurationBuilder()
+                .addToClusterDefinitions(new ClusterDefinition(TARGET_CLUSTER_NAME, cluster.getBootstrapServers(), null))
+                .addToVirtualClusters(new VirtualClusterBuilder()
+                        .withName(VIRTUAL_CLUSTER_NAME)
+                        .withTarget(new RouteTarget(TARGET_CLUSTER_NAME, null))
+                        .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS)
+                                .withNewTls()
+                                    .withNewKeyStoreKey()
+                                        .withStoreFile(insecureKeystore.toString())
+                                        .withNewInlinePasswordStoreProvider(downstreamCertificateGenerator.getPassword())
+                                    .endKeyStoreKey()
+                                .endTls()
+                                .build())
+                        .build());
+        // @formatter:on
+
+        // When / Then - proxy starts and operates normally; no security config means DISABLED policy
+        try (var tester = kroxyliciousTester(builder);
+                var admin = tester.admin(VIRTUAL_CLUSTER_NAME, tlsAdminClientConfig())) {
+            assertThat(admin.describeCluster().nodes()).succeedsWithin(10, TimeUnit.SECONDS).isNotNull();
+        }
+    }
+
     private ConfigurationBuilder baseBuilderWithPolicy(Policy policy) {
         return KroxyliciousConfigUtils.baseConfigurationBuilder()
                 .withSecurity(new SecurityConfig(new FilePermissionConfig(policy)))
