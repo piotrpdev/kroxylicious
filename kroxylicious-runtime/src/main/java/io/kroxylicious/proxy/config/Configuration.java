@@ -101,7 +101,9 @@ public record Configuration(
         validateRouterDefinitions(routerDefinitions, targetClusterNames, filterDefsByName);
         validateVirtualClusterReceivers(virtualClusters, targetClusterNames, routerDefinitions);
 
-        FilePermissionValidator.setGlobalPolicy(getEffectiveSecurity().getEffectiveFilePermissions().getEffectivePolicy());
+        // Can't call getEffectiveSecurity() here as this.security is null there.
+        SecurityConfig effectiveSecurity = security != null ? security : SecurityConfig.DEFAULT;
+        FilePermissionValidator.setGlobalPolicy(effectiveSecurity.getEffectiveFilePermissions().getEffectivePolicy());
 
         if (filterDefinitions != null) {
             checkAllNamedFilterAreUsed(filterDefinitions, virtualClusters, defaultFilters, routerDefinitions);
