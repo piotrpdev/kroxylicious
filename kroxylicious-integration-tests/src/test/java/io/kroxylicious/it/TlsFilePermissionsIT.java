@@ -22,6 +22,7 @@ import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.kroxylicious.proxy.config.ClusterDefinition;
+import io.kroxylicious.proxy.config.ConfigurationBuilder;
 import io.kroxylicious.proxy.config.RouteTarget;
 import io.kroxylicious.proxy.config.SecurityConfig;
 import io.kroxylicious.proxy.config.VirtualClusterBuilder;
@@ -48,6 +49,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @EnabledOnOs({ OS.LINUX, OS.MAC })
 class TlsFilePermissionsIT extends AbstractTlsIT {
 
+    private static final String VIRTUAL_CLUSTER_NAME = "demo";
+    private static final String TARGET_CLUSTER_NAME = "target";
+
     static KafkaCluster cluster;
     static @Tls KafkaCluster tlsCluster;
 
@@ -64,12 +68,10 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
         Files.setPosixFilePermissions(insecureKeystore, PosixFilePermissions.fromString("rw-r--r--"));
 
         // @formatter:off
-        var builder = KroxyliciousConfigUtils.baseConfigurationBuilder()
-                .withSecurity(new SecurityConfig(new FilePermissionConfig(Policy.STRICT)))
-                .addToClusterDefinitions(new ClusterDefinition("target", cluster.getBootstrapServers(), null))
+        var builder = baseBuilderWithPolicy(Policy.STRICT)
                 .addToVirtualClusters(new VirtualClusterBuilder()
-                        .withName("demo")
-                        .withTarget(new RouteTarget("target", null))
+                        .withName(VIRTUAL_CLUSTER_NAME)
+                        .withTarget(new RouteTarget(TARGET_CLUSTER_NAME, null))
                         .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS)
                                 .withNewTls()
                                     .withNewKeyStoreKey()
@@ -105,12 +107,10 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
         Files.setPosixFilePermissions(insecurePassFile, PosixFilePermissions.fromString("rw-r-----"));
 
         // @formatter:off
-        var builder = KroxyliciousConfigUtils.baseConfigurationBuilder()
-                .withSecurity(new SecurityConfig(new FilePermissionConfig(Policy.STRICT)))
-                .addToClusterDefinitions(new ClusterDefinition("target", cluster.getBootstrapServers(), null))
+        var builder = baseBuilderWithPolicy(Policy.STRICT)
                 .addToVirtualClusters(new VirtualClusterBuilder()
-                        .withName("demo")
-                        .withTarget(new RouteTarget("target", null))
+                        .withName(VIRTUAL_CLUSTER_NAME)
+                        .withTarget(new RouteTarget(TARGET_CLUSTER_NAME, null))
                         .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS)
                                 .withNewTls()
                                     .withNewKeyStoreKey()
@@ -143,12 +143,10 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
         Files.setPosixFilePermissions(secureKeystore, PosixFilePermissions.fromString("rw-------"));
 
         // @formatter:off
-        var builder = KroxyliciousConfigUtils.baseConfigurationBuilder()
-                .withSecurity(new SecurityConfig(new FilePermissionConfig(Policy.STRICT)))
-                .addToClusterDefinitions(new ClusterDefinition("target", cluster.getBootstrapServers(), null))
+        var builder = baseBuilderWithPolicy(Policy.STRICT)
                 .addToVirtualClusters(new VirtualClusterBuilder()
-                        .withName("demo")
-                        .withTarget(new RouteTarget("target", null))
+                        .withName(VIRTUAL_CLUSTER_NAME)
+                        .withTarget(new RouteTarget(TARGET_CLUSTER_NAME, null))
                         .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS)
                                 .withNewTls()
                                     .withNewKeyStoreKey()
@@ -162,10 +160,7 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
 
         // When / Then - proxy starts successfully; a TLS client can connect and operate
         try (var tester = kroxyliciousTester(builder);
-                var admin = tester.admin("demo",
-                        Map.of(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SSL.name,
-                                SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
-                                SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamCertificateGenerator.getPassword()))) {
+                var admin = tester.admin(VIRTUAL_CLUSTER_NAME, tlsAdminClientConfig())) {
             assertThat(admin.describeCluster().nodes()).succeedsWithin(10, TimeUnit.SECONDS).isNotNull();
         }
     }
@@ -184,7 +179,7 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
         var builder = KroxyliciousConfigUtils.baseConfigurationBuilder()
                 .withSecurity(new SecurityConfig(new FilePermissionConfig(Policy.STRICT)))
                 .addNewClusterDefinition()
-                    .withName("target")
+                    .withName(TARGET_CLUSTER_NAME)
                     .withBootstrapServers(tlsCluster.getBootstrapServers())
                     .withNewTls()
                         .withNewTrustStoreTrust()
@@ -194,8 +189,8 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
                     .endTls()
                 .endClusterDefinition()
                 .addToVirtualClusters(new VirtualClusterBuilder()
-                        .withName("demo")
-                        .withTarget(new RouteTarget("target", null))
+                        .withName(VIRTUAL_CLUSTER_NAME)
+                        .withTarget(new RouteTarget(TARGET_CLUSTER_NAME, null))
                         .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS).build())
                         .build());
         // @formatter:on
@@ -220,12 +215,10 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
         Files.setPosixFilePermissions(groupReadableKeystore, PosixFilePermissions.fromString("r--r-----"));
 
         // @formatter:off
-        var builder = KroxyliciousConfigUtils.baseConfigurationBuilder()
-                .withSecurity(new SecurityConfig(new FilePermissionConfig(Policy.RELAXED)))
-                .addToClusterDefinitions(new ClusterDefinition("target", cluster.getBootstrapServers(), null))
+        var builder = baseBuilderWithPolicy(Policy.RELAXED)
                 .addToVirtualClusters(new VirtualClusterBuilder()
-                        .withName("demo")
-                        .withTarget(new RouteTarget("target", null))
+                        .withName(VIRTUAL_CLUSTER_NAME)
+                        .withTarget(new RouteTarget(TARGET_CLUSTER_NAME, null))
                         .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS)
                                 .withNewTls()
                                     .withNewKeyStoreKey()
@@ -239,10 +232,7 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
 
         // When / Then - proxy starts successfully; group-readable files are accepted by RELAXED
         try (var tester = kroxyliciousTester(builder);
-                var admin = tester.admin("demo",
-                        Map.of(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SSL.name,
-                                SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
-                                SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamCertificateGenerator.getPassword()))) {
+                var admin = tester.admin(VIRTUAL_CLUSTER_NAME, tlsAdminClientConfig())) {
             assertThat(admin.describeCluster().nodes()).succeedsWithin(10, TimeUnit.SECONDS).isNotNull();
         }
     }
@@ -255,12 +245,10 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
         Files.setPosixFilePermissions(worldReadableKeystore, PosixFilePermissions.fromString("rw-r--r--"));
 
         // @formatter:off
-        var builder = KroxyliciousConfigUtils.baseConfigurationBuilder()
-                .withSecurity(new SecurityConfig(new FilePermissionConfig(Policy.RELAXED)))
-                .addToClusterDefinitions(new ClusterDefinition("target", cluster.getBootstrapServers(), null))
+        var builder = baseBuilderWithPolicy(Policy.RELAXED)
                 .addToVirtualClusters(new VirtualClusterBuilder()
-                        .withName("demo")
-                        .withTarget(new RouteTarget("target", null))
+                        .withName(VIRTUAL_CLUSTER_NAME)
+                        .withTarget(new RouteTarget(TARGET_CLUSTER_NAME, null))
                         .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS)
                                 .withNewTls()
                                     .withNewKeyStoreKey()
@@ -292,12 +280,10 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
         Files.setPosixFilePermissions(insecureKeystore, PosixFilePermissions.fromString("rw-r--r--"));
 
         // @formatter:off
-        var builder = KroxyliciousConfigUtils.baseConfigurationBuilder()
-                .withSecurity(new SecurityConfig(new FilePermissionConfig(Policy.DISABLED)))
-                .addToClusterDefinitions(new ClusterDefinition("target", cluster.getBootstrapServers(), null))
+        var builder = baseBuilderWithPolicy(Policy.DISABLED)
                 .addToVirtualClusters(new VirtualClusterBuilder()
-                        .withName("demo")
-                        .withTarget(new RouteTarget("target", null))
+                        .withName(VIRTUAL_CLUSTER_NAME)
+                        .withTarget(new RouteTarget(TARGET_CLUSTER_NAME, null))
                         .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS)
                                 .withNewTls()
                                     .withNewKeyStoreKey()
@@ -311,11 +297,21 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
 
         // When / Then - proxy starts and operates normally; insecure file only produces a warning log
         try (var tester = kroxyliciousTester(builder);
-                var admin = tester.admin("demo",
-                        Map.of(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SSL.name,
-                                SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
-                                SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamCertificateGenerator.getPassword()))) {
+                var admin = tester.admin(VIRTUAL_CLUSTER_NAME, tlsAdminClientConfig())) {
             assertThat(admin.describeCluster().nodes()).succeedsWithin(10, TimeUnit.SECONDS).isNotNull();
         }
+    }
+
+    private ConfigurationBuilder baseBuilderWithPolicy(Policy policy) {
+        return KroxyliciousConfigUtils.baseConfigurationBuilder()
+                .withSecurity(new SecurityConfig(new FilePermissionConfig(policy)))
+                .addToClusterDefinitions(new ClusterDefinition(TARGET_CLUSTER_NAME, cluster.getBootstrapServers(), null));
+    }
+
+    private Map<String, Object> tlsAdminClientConfig() {
+        return Map.of(
+                CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SSL.name,
+                SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
+                SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamCertificateGenerator.getPassword());
     }
 }
