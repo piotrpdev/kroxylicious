@@ -32,6 +32,7 @@ import io.kroxylicious.proxy.security.FilePermissionValidator;
 import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 import io.kroxylicious.testing.integration.tester.KroxyliciousConfigUtils;
 import io.kroxylicious.testing.kafka.api.KafkaCluster;
+import io.kroxylicious.testing.kafka.common.Tls;
 import io.kroxylicious.testing.kafka.junit5ext.KafkaClusterExtension;
 
 import static io.kroxylicious.testing.integration.tester.KroxyliciousConfigUtils.defaultPortIdentifiesNodeGatewayBuilder;
@@ -40,14 +41,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies that {@link FilePermissionValidator} STRICT policy rejects insecure TLS file
- * permissions end-to-end — from configuration parsing through to proxy startup failure.
+ * Verifies that {@link FilePermissionValidator} policies (STRICT, RELAXED, DISABLED) are
+ * honoured end-to-end - from configuration parsing through to proxy startup success or failure.
  */
 @ExtendWith(KafkaClusterExtension.class)
 @EnabledOnOs({ OS.LINUX, OS.MAC })
 class TlsFilePermissionsIT extends AbstractTlsIT {
 
     static KafkaCluster cluster;
+    static @Tls KafkaCluster tlsCluster;
 
     @AfterEach
     void resetGlobalPolicy() {
@@ -159,6 +161,155 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
         // @formatter:on
 
         // When / Then - proxy starts successfully; a TLS client can connect and operate
+        try (var tester = kroxyliciousTester(builder);
+                var admin = tester.admin("demo",
+                        Map.of(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SSL.name,
+                                SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
+                                SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamCertificateGenerator.getPassword()))) {
+            assertThat(admin.describeCluster().nodes()).succeedsWithin(10, TimeUnit.SECONDS).isNotNull();
+        }
+    }
+
+    @Test
+    void strictPolicyRejectsStartupWhenUpstreamTruststoreIsInsecure() throws Exception {
+        // Given - the broker truststore made world-readable (0644)
+        var brokerTruststore = (String) tlsCluster.getKafkaClientConfiguration().get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
+        var brokerTruststorePassword = (String) tlsCluster.getKafkaClientConfiguration().get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+
+        Path insecureTruststore = certsDirectory.resolve("broker-trust.jks");
+        Files.copy(Path.of(brokerTruststore), insecureTruststore);
+        Files.setPosixFilePermissions(insecureTruststore, PosixFilePermissions.fromString("rw-r--r--"));
+
+        // @formatter:off
+        var builder = KroxyliciousConfigUtils.baseConfigurationBuilder()
+                .withSecurity(new SecurityConfig(new FilePermissionConfig(Policy.STRICT)))
+                .addNewClusterDefinition()
+                    .withName("target")
+                    .withBootstrapServers(tlsCluster.getBootstrapServers())
+                    .withNewTls()
+                        .withNewTrustStoreTrust()
+                            .withStoreFile(insecureTruststore.toString())
+                            .withNewInlinePasswordStoreProvider(brokerTruststorePassword)
+                        .endTrustStoreTrust()
+                    .endTls()
+                .endClusterDefinition()
+                .addToVirtualClusters(new VirtualClusterBuilder()
+                        .withName("demo")
+                        .withTarget(new RouteTarget("target", null))
+                        .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS).build())
+                        .build());
+        // @formatter:on
+
+        // When / Then - proxy fails to start; upstream truststore permission violation
+        assertThatThrownBy(() -> {
+            try (var ignored = kroxyliciousTester(builder)) {
+                return; // suppress empty-try-block warning; exception is expected before body runs
+            }
+        })
+                .isInstanceOf(SslContextBuildException.class)
+                .rootCause()
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("too open");
+    }
+
+    @Test
+    void relaxedPolicyAcceptsGroupReadableKeystoreFile() throws Exception {
+        // Given - keystore with owner+group read (0440); the Kubernetes fsGroup scenario
+        Path groupReadableKeystore = certsDirectory.resolve("group-readable.p12");
+        Files.copy(Path.of(downstreamCertificateGenerator.getKeyStoreLocation()), groupReadableKeystore);
+        Files.setPosixFilePermissions(groupReadableKeystore, PosixFilePermissions.fromString("r--r-----"));
+
+        // @formatter:off
+        var builder = KroxyliciousConfigUtils.baseConfigurationBuilder()
+                .withSecurity(new SecurityConfig(new FilePermissionConfig(Policy.RELAXED)))
+                .addToClusterDefinitions(new ClusterDefinition("target", cluster.getBootstrapServers(), null))
+                .addToVirtualClusters(new VirtualClusterBuilder()
+                        .withName("demo")
+                        .withTarget(new RouteTarget("target", null))
+                        .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS)
+                                .withNewTls()
+                                    .withNewKeyStoreKey()
+                                        .withStoreFile(groupReadableKeystore.toString())
+                                        .withNewInlinePasswordStoreProvider(downstreamCertificateGenerator.getPassword())
+                                    .endKeyStoreKey()
+                                .endTls()
+                                .build())
+                        .build());
+        // @formatter:on
+
+        // When / Then - proxy starts successfully; group-readable files are accepted by RELAXED
+        try (var tester = kroxyliciousTester(builder);
+                var admin = tester.admin("demo",
+                        Map.of(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SSL.name,
+                                SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
+                                SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamCertificateGenerator.getPassword()))) {
+            assertThat(admin.describeCluster().nodes()).succeedsWithin(10, TimeUnit.SECONDS).isNotNull();
+        }
+    }
+
+    @Test
+    void relaxedPolicyRejectsWorldReadableKeystoreFile() throws Exception {
+        // Given - keystore with world-readable permissions (0644)
+        Path worldReadableKeystore = certsDirectory.resolve("world-readable.p12");
+        Files.copy(Path.of(downstreamCertificateGenerator.getKeyStoreLocation()), worldReadableKeystore);
+        Files.setPosixFilePermissions(worldReadableKeystore, PosixFilePermissions.fromString("rw-r--r--"));
+
+        // @formatter:off
+        var builder = KroxyliciousConfigUtils.baseConfigurationBuilder()
+                .withSecurity(new SecurityConfig(new FilePermissionConfig(Policy.RELAXED)))
+                .addToClusterDefinitions(new ClusterDefinition("target", cluster.getBootstrapServers(), null))
+                .addToVirtualClusters(new VirtualClusterBuilder()
+                        .withName("demo")
+                        .withTarget(new RouteTarget("target", null))
+                        .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS)
+                                .withNewTls()
+                                    .withNewKeyStoreKey()
+                                        .withStoreFile(worldReadableKeystore.toString())
+                                        .withNewInlinePasswordStoreProvider(downstreamCertificateGenerator.getPassword())
+                                    .endKeyStoreKey()
+                                .endTls()
+                                .build())
+                        .build());
+        // @formatter:on
+
+        // When / Then - proxy fails to start; world-readable files are rejected by RELAXED
+        assertThatThrownBy(() -> {
+            try (var ignored = kroxyliciousTester(builder)) {
+                return; // suppress empty-try-block warning; exception is expected before body runs
+            }
+        })
+                .isInstanceOf(SslContextBuildException.class)
+                .rootCause()
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("too open");
+    }
+
+    @Test
+    void disabledPolicyPermitsStartupWithInsecureKeystoreFile() throws Exception {
+        // Given - keystore with world-readable permissions (0644) and DISABLED policy
+        Path insecureKeystore = certsDirectory.resolve("insecure.p12");
+        Files.copy(Path.of(downstreamCertificateGenerator.getKeyStoreLocation()), insecureKeystore);
+        Files.setPosixFilePermissions(insecureKeystore, PosixFilePermissions.fromString("rw-r--r--"));
+
+        // @formatter:off
+        var builder = KroxyliciousConfigUtils.baseConfigurationBuilder()
+                .withSecurity(new SecurityConfig(new FilePermissionConfig(Policy.DISABLED)))
+                .addToClusterDefinitions(new ClusterDefinition("target", cluster.getBootstrapServers(), null))
+                .addToVirtualClusters(new VirtualClusterBuilder()
+                        .withName("demo")
+                        .withTarget(new RouteTarget("target", null))
+                        .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS)
+                                .withNewTls()
+                                    .withNewKeyStoreKey()
+                                        .withStoreFile(insecureKeystore.toString())
+                                        .withNewInlinePasswordStoreProvider(downstreamCertificateGenerator.getPassword())
+                                    .endKeyStoreKey()
+                                .endTls()
+                                .build())
+                        .build());
+        // @formatter:on
+
+        // When / Then - proxy starts and operates normally; insecure file only produces a warning log
         try (var tester = kroxyliciousTester(builder);
                 var admin = tester.admin("demo",
                         Map.of(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SSL.name,
