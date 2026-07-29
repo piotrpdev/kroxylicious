@@ -147,7 +147,7 @@ public class FilePermissionValidator {
             }
         }
         else {
-            throw new IllegalStateException(String.format(
+            throw new FilePermissionViolationException(String.format(
                     "Permissions %s for '%s' are too open.%n" +
                             "It is required that your %s is NOT accessible by others.%n" +
                             "This file will not be used.",

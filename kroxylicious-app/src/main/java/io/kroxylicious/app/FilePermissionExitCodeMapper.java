@@ -6,6 +6,8 @@
 
 package io.kroxylicious.app;
 
+import io.kroxylicious.proxy.security.FilePermissionViolationException;
+
 import picocli.CommandLine;
 
 /**
@@ -27,9 +29,7 @@ class FilePermissionExitCodeMapper implements CommandLine.IExitCodeExceptionMapp
 
     private static boolean isFilePermissionViolation(Throwable t) {
         for (Throwable current = t; current != null; current = current.getCause()) {
-            if (current instanceof IllegalStateException
-                    && current.getMessage() != null
-                    && current.getMessage().contains("too open")) {
+            if (current instanceof FilePermissionViolationException) {
                 return true;
             }
         }

@@ -63,7 +63,7 @@ class FilePermissionValidatorTest {
         Path file = createFileWithPermissions("640");
         // When / Then
         assertThatThrownBy(() -> FilePermissionValidator.validate(file, Policy.STRICT, "private key"))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(FilePermissionViolationException.class)
                 .hasMessageContaining("0640")
                 .hasMessageContaining("too open")
                 .hasMessageContaining("private key");
@@ -75,7 +75,7 @@ class FilePermissionValidatorTest {
         Path file = createFileWithPermissions("644");
         // When / Then
         assertThatThrownBy(() -> FilePermissionValidator.validate(file, Policy.STRICT, "keystore"))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(FilePermissionViolationException.class)
                 .hasMessageContaining("0644")
                 .hasMessageContaining("too open")
                 .hasMessageContaining("keystore");
@@ -87,7 +87,7 @@ class FilePermissionValidatorTest {
         Path file = createFileWithPermissions("666");
         // When / Then
         assertThatThrownBy(() -> FilePermissionValidator.validate(file, Policy.STRICT, "password file"))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(FilePermissionViolationException.class)
                 .hasMessageContaining("0666");
     }
 
@@ -98,7 +98,7 @@ class FilePermissionValidatorTest {
             Path file = createFileWithPermissions(perms);
             // When / Then
             assertThatThrownBy(() -> FilePermissionValidator.validate(file, Policy.STRICT, "test"))
-                    .isInstanceOf(IllegalStateException.class);
+                    .isInstanceOf(FilePermissionViolationException.class);
         }
     }
 
@@ -137,7 +137,7 @@ class FilePermissionValidatorTest {
         Path file = createFileWithPermissions("444");
         // When / Then
         assertThatThrownBy(() -> FilePermissionValidator.validate(file, Policy.RELAXED, "truststore"))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(FilePermissionViolationException.class)
                 .hasMessageContaining("0444")
                 .hasMessageContaining("truststore");
     }
@@ -148,7 +148,7 @@ class FilePermissionValidatorTest {
         Path file = createFileWithPermissions("644");
         // When / Then
         assertThatThrownBy(() -> FilePermissionValidator.validate(file, Policy.RELAXED, "certificate"))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(FilePermissionViolationException.class)
                 .hasMessageContaining("0644");
     }
 
@@ -170,7 +170,7 @@ class FilePermissionValidatorTest {
             Path file = createFileWithPermissions(perms);
             // When / Then
             assertThatThrownBy(() -> FilePermissionValidator.validate(file, Policy.RELAXED, "test"))
-                    .isInstanceOf(IllegalStateException.class);
+                    .isInstanceOf(FilePermissionViolationException.class);
         }
     }
 
@@ -278,7 +278,7 @@ class FilePermissionValidatorTest {
         Files.createSymbolicLink(link, target);
         // When / Then
         assertThatThrownBy(() -> FilePermissionValidator.validate(link, Policy.STRICT, "private key"))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(FilePermissionViolationException.class)
                 .hasMessageContaining("0644");
     }
 
@@ -288,7 +288,7 @@ class FilePermissionValidatorTest {
         Path file = createFileWithPermissions("644");
         // When / Then
         assertThatThrownBy(() -> FilePermissionValidator.validate(file, Policy.STRICT, "private key"))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(FilePermissionViolationException.class)
                 .hasMessageContaining("0644")
                 .hasMessageContaining(file.toAbsolutePath().toString())
                 .hasMessageContaining("private key");

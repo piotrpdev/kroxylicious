@@ -28,6 +28,7 @@ import io.kroxylicious.proxy.config.SecurityConfig;
 import io.kroxylicious.proxy.config.VirtualClusterBuilder;
 import io.kroxylicious.proxy.config.secret.FilePassword;
 import io.kroxylicious.proxy.internal.tls.SslContextBuildException;
+import io.kroxylicious.proxy.security.FilePermissionViolationException;
 import io.kroxylicious.proxy.security.FilePermissionConfig;
 import io.kroxylicious.proxy.security.FilePermissionValidator;
 import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
@@ -91,7 +92,7 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
         })
                 .isInstanceOf(SslContextBuildException.class)
                 .rootCause()
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(FilePermissionViolationException.class)
                 .hasMessageContaining("too open");
     }
 
@@ -130,7 +131,7 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
         })
                 .isInstanceOf(SslContextBuildException.class)
                 .rootCause()
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(FilePermissionViolationException.class)
                 .hasMessageContaining("too open")
                 .hasMessageContaining("password file");
     }
@@ -203,7 +204,7 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
         })
                 .isInstanceOf(SslContextBuildException.class)
                 .rootCause()
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(FilePermissionViolationException.class)
                 .hasMessageContaining("too open");
     }
 
@@ -286,7 +287,7 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
         })
                 .isInstanceOf(SslContextBuildException.class)
                 .rootCause()
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(FilePermissionViolationException.class)
                 .hasMessageContaining("too open")
                 .hasMessageContaining("password file");
     }
@@ -352,7 +353,7 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
         })
                 .isInstanceOf(SslContextBuildException.class)
                 .rootCause()
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(FilePermissionViolationException.class)
                 .hasMessageContaining("too open");
     }
 
