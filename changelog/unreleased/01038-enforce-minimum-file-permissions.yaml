@@ -1,0 +1,13 @@
+title: "feat(security): enforce minimum file permissions on confidential files"
+type: feat
+issues:
+  - 1038
+important_notes:
+  - |
+    New `security.filePermissions.policy` configuration option validates POSIX permissions on TLS keys, keystores, truststores, and password files before reading them.
+    Policies: 
+    - `STRICT` (owner-only)
+    - `RELAXED` (allows group access for Kubernetes fsGroup)
+    - `DISABLED` (warn only, current default). The default will change from `DISABLED` to `STRICT` in a future release.
+    The Kubernetes operator now sets `defaultMode: 0440` on secret volumes, and configures `fsGroup`/`runAsGroup` on plain Kubernetes (omitted on OpenShift where the SCC handles it).
+    The proxy exits with code 78 (`EX_CONFIG`) on file permission violations. The operator detects this and reports a `FilePermissionsValid=False` condition on the `KafkaProxy` resource.
