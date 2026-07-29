@@ -27,7 +27,7 @@ Use this in production environments.
 This supports Kubernetes deployments where secrets are mounted with a group set via `fsGroup` in the pod security context, making file permissions such as `0440` acceptable.
 
 `DISABLED`:: No permissions are enforced.
-A warning is logged for world-readable files, but startup is never rejected.
+A warning is logged for files that would be rejected by `STRICT` or `RELAXED`, but startup is never rejected.
 This is the default for backward compatibility until the default is changed to `STRICT` in a future release.
 
 .Configuration fragment enabling STRICT permission checking
@@ -56,6 +56,13 @@ When a non-`DISABLED` policy is configured, Kroxylicious checks permissions befo
 * AWS IRSA web identity token files
 * AWS EKS Pod Identity authorization token files
 
+If a file fails the permission check, Kroxylicious throws a `FilePermissionViolationException` and the proxy fails to start.
+
+== Exit code
+
+When the proxy fails to start due to a file permission violation, it exits with code 78 (`EX_CONFIG` from sysexits.h) instead of the generic exit code 1.
+This distinct exit code allows the Kubernetes operator to determine _why_ the proxy crashed by inspecting the pod's terminated container status, without reading logs.
+
 == Making files compliant
 
 To restrict a file to owner-only access:
@@ -76,13 +83,42 @@ The Kroxylicious Operator automatically sets the pod security context so that se
 * `runAsGroup: 185` - The proxy container process runs with GID 185, allowing it to read files owned by that group.
 * `defaultMode: 0440` - Secret volumes are mounted with owner+group read-only permissions, preventing world-readable secrets.
 
-With these settings in place, the `RELAXED` policy is suitable for operator-managed deployments:
+On OpenShift, `fsGroup` and `runAsGroup` are omitted because the `restricted-v2` SCC's `MustRunAs` strategy automatically injects the namespace-allocated GID.
+
+With these settings in place, the `RELAXED` policy is suitable for operator-managed deployments.
+The operator defaults to `RELAXED` when no policy is explicitly configured in the `KafkaProxy` resource.
+
+=== Operator status condition
+
+When the proxy crashes due to a file permission violation, the operator sets a `FilePermissionsValid` condition on the `KafkaProxy` resource:
+
+* `FilePermissionsValid=True` - the proxy is running or no permission violation has been detected.
+* `FilePermissionsValid=False` with reason `FilePermissionsViolation` - the proxy crashed with exit code 78.
+The condition message contains the error detail.
+
+The condition clears automatically when the proxy restarts successfully after the permissions are corrected.
+
+You can inspect the condition with:
+
+[source,bash]
+----
+kubectl get kafkaproxy simple -o jsonpath='{.status.conditions}'
+----
+
+=== Configuring the policy in the KafkaProxy CRD
+
+The `KafkaProxy` CRD exposes the file permission policy at `spec.security.filePermissions.policy`:
 
 [source,yaml]
 ----
-security:
-  filePermissions:
-    policy: RELAXED
+apiVersion: kroxylicious.io/v1alpha1
+kind: KafkaProxy
+metadata:
+  name: simple
+spec:
+  security:
+    filePermissions:
+      policy: RELAXED
 ----
 
 When running the proxy directly on Linux (not via the operator), use `STRICT` policy and ensure secret files have owner-only permissions:
