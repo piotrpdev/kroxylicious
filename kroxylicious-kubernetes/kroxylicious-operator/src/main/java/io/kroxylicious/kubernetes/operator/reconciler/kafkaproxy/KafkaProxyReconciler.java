@@ -30,6 +30,7 @@ import io.fabric8.kubernetes.api.model.Volume;
 import io.fabric8.kubernetes.api.model.VolumeBuilder;
 import io.fabric8.kubernetes.api.model.VolumeMount;
 import io.fabric8.kubernetes.api.model.VolumeMountBuilder;
+import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.apps.DeploymentStatus;
 import io.fabric8.kubernetes.client.ResourceNotFoundException;
@@ -520,6 +521,14 @@ public class KafkaProxyReconciler implements
         var newConditions = new ArrayList<>(deprecationCheckContext.conditions());
         var existingConditionsWithoutOutdatedDeprecations = removeOutdatedDeprecations(primary, newConditions);
 
+        Condition filePermsCondition = detectFilePermissionsViolation(context, primary)
+                .map(msg -> statusFactory.newFalseCondition(primary,
+                        Condition.Type.FilePermissionsValid,
+                        Condition.REASON_FILE_PERMISSIONS_VIOLATION, msg))
+                .orElseGet(() -> statusFactory.newTrueCondition(primary,
+                        Condition.Type.FilePermissionsValid));
+        newConditions.add(filePermsCondition);
+
         newConditions.add(statusFactory.newTrueCondition(primary, Condition.Type.Ready));
         var update = statusFactory.kafkaProxyStatusPatch(primary, existingConditionsWithoutOutdatedDeprecations, ResourceState.fromList(newConditions), readyReplicas);
         var uc = UpdateControl.patchStatus(update);
@@ -581,13 +590,60 @@ public class KafkaProxyReconciler implements
 
     }
 
+    private static final int EX_CONFIG = 78;
+
+    private Optional<String> detectFilePermissionsViolation(Context<KafkaProxy> context, KafkaProxy primary) {
+        return context.getSecondaryResource(Deployment.class, DEPLOYMENT_DEP)
+                .flatMap(deployment -> {
+                    var matchLabels = deployment.getSpec().getSelector().getMatchLabels();
+                    var pods = context.getClient().pods()
+                            .inNamespace(namespace(primary))
+                            .withLabels(matchLabels)
+                            .list().getItems();
+                    return pods.stream()
+                            .flatMap(pod -> pod.getStatus().getContainerStatuses().stream())
+                            .filter(cs -> cs.getState() == null || cs.getState().getRunning() == null)
+                            .map(cs -> {
+                                if (cs.getState() != null
+                                        && cs.getState().getTerminated() != null
+                                        && cs.getState().getTerminated().getExitCode() != null
+                                        && cs.getState().getTerminated().getExitCode() == EX_CONFIG) {
+                                    return cs.getState().getTerminated();
+                                }
+                                if (cs.getLastState() != null
+                                        && cs.getLastState().getTerminated() != null
+                                        && cs.getLastState().getTerminated().getExitCode() != null
+                                        && cs.getLastState().getTerminated().getExitCode() == EX_CONFIG) {
+                                    return cs.getLastState().getTerminated();
+                                }
+                                return null;
+                            })
+                            .filter(Objects::nonNull)
+                            .findFirst()
+                            .map(terminated -> {
+                                String msg = terminated.getMessage();
+                                return msg != null ? msg : "File permission validation failed (exit code " + EX_CONFIG + ")";
+                            });
+                });
+    }
+
     @Override
     public List<EventSource<?, KafkaProxy>> prepareEventSources(EventSourceContext<KafkaProxy> context) {
         return List.of(
                 buildFilterEventSource(context),
                 buildVirtualKafkaClusterEventSource(context),
                 buildKafkaServiceEventSource(context),
-                buildKafkaProxyIngressEventSource(context));
+                buildKafkaProxyIngressEventSource(context),
+                buildPodEventSource(context)
+        );
+    }
+
+    private static InformerEventSource<Pod, KafkaProxy> buildPodEventSource(EventSourceContext<KafkaProxy> context) {
+        var configuration = InformerEventSourceConfiguration.from(Pod.class, KafkaProxy.class)
+                .withSecondaryToPrimaryMapper(new PodSecondaryToKafkaProxyPrimaryMapper())
+                .withLabelSelector("app.kubernetes.io/managed-by=kroxylicious-operator")
+                .build();
+        return new InformerEventSource<>(configuration, context);
     }
 
     private static Optional<AllowDeny<String>> buildProtocols(@Nullable Protocols protocols) {
