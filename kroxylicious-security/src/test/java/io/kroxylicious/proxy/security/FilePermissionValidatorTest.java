@@ -294,6 +294,21 @@ class FilePermissionValidatorTest {
                 .hasMessageContaining("private key");
     }
 
+    @Test
+    void shouldLogWarnAndNotThrowWhenFileDoesNotExist() {
+        // Given
+        Path nonExistent = tempDir.resolve("does-not-exist.key");
+        Logger mockLogger = mock(Logger.class);
+        LoggingEventBuilder mockBuilder = mock(LoggingEventBuilder.class, Mockito.RETURNS_SELF);
+        when(mockLogger.atWarn()).thenReturn(mockBuilder);
+
+        // When / Then
+        assertThatCode(() -> FilePermissionValidator.validate(nonExistent, Policy.STRICT, "private key", mockLogger, new HashSet<>()))
+                .doesNotThrowAnyException();
+        verify(mockLogger).atWarn();
+        verify(mockBuilder).log("Failed to read file permissions for confidential file");
+    }
+
     private Path createFileWithPermissions(String octalPerms) throws IOException {
         Path file = Files.createTempFile(tempDir, "test", ".txt");
         Files.writeString(file, "test content");
