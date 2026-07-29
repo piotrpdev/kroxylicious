@@ -61,4 +61,21 @@ class PodSecondaryToKafkaProxyPrimaryMapperTest {
         // Then
         assertThat(primaryResourceIDs).isEmpty();
     }
+
+    @Test
+    void podWithNullLabelsReturnsEmpty() {
+        // Given
+        var pod = new PodBuilder()
+                .withNewMetadata()
+                    .withName("no-labels-pod")
+                    .withNamespace("kroxylicious")
+                .endMetadata()
+                .build();
+
+        // When
+        Set<ResourceID> primaryResourceIDs = mapper.toPrimaryResourceIDs(pod);
+
+        // Then
+        assertThat(primaryResourceIDs).isEmpty();
+    }
 }

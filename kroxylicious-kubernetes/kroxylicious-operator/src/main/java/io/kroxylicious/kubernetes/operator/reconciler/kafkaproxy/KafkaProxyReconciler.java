@@ -593,38 +593,49 @@ public class KafkaProxyReconciler implements
     private static final int EX_CONFIG = 78;
 
     private Optional<String> detectFilePermissionsViolation(Context<KafkaProxy> context, KafkaProxy primary) {
-        return context.getSecondaryResource(Deployment.class, DEPLOYMENT_DEP)
-                .flatMap(deployment -> {
-                    var matchLabels = deployment.getSpec().getSelector().getMatchLabels();
-                    var pods = context.getClient().pods()
-                            .inNamespace(namespace(primary))
-                            .withLabels(matchLabels)
-                            .list().getItems();
-                    return pods.stream()
-                            .flatMap(pod -> pod.getStatus().getContainerStatuses().stream())
-                            .filter(cs -> cs.getState() == null || cs.getState().getRunning() == null)
-                            .map(cs -> {
-                                if (cs.getState() != null
-                                        && cs.getState().getTerminated() != null
-                                        && cs.getState().getTerminated().getExitCode() != null
-                                        && cs.getState().getTerminated().getExitCode() == EX_CONFIG) {
-                                    return cs.getState().getTerminated();
-                                }
-                                if (cs.getLastState() != null
-                                        && cs.getLastState().getTerminated() != null
-                                        && cs.getLastState().getTerminated().getExitCode() != null
-                                        && cs.getLastState().getTerminated().getExitCode() == EX_CONFIG) {
-                                    return cs.getLastState().getTerminated();
-                                }
-                                return null;
-                            })
-                            .filter(Objects::nonNull)
-                            .findFirst()
-                            .map(terminated -> {
-                                String msg = terminated.getMessage();
-                                return msg != null ? msg : "File permission validation failed (exit code " + EX_CONFIG + ")";
-                            });
-                });
+        try {
+            return context.getSecondaryResource(Deployment.class, DEPLOYMENT_DEP)
+                    .flatMap(deployment -> {
+                        var matchLabels = deployment.getSpec().getSelector().getMatchLabels();
+                        var pods = context.getClient().pods()
+                                .inNamespace(namespace(primary))
+                                .withLabels(matchLabels)
+                                .list().getItems();
+                        return pods.stream()
+                                .filter(pod -> pod.getStatus() != null && pod.getStatus().getContainerStatuses() != null)
+                                .flatMap(pod -> pod.getStatus().getContainerStatuses().stream())
+                                .filter(cs -> cs.getState() == null || cs.getState().getRunning() == null)
+                                .map(cs -> {
+                                    if (cs.getState() != null
+                                            && cs.getState().getTerminated() != null
+                                            && cs.getState().getTerminated().getExitCode() != null
+                                            && cs.getState().getTerminated().getExitCode() == EX_CONFIG) {
+                                        return cs.getState().getTerminated();
+                                    }
+                                    if (cs.getLastState() != null
+                                            && cs.getLastState().getTerminated() != null
+                                            && cs.getLastState().getTerminated().getExitCode() != null
+                                            && cs.getLastState().getTerminated().getExitCode() == EX_CONFIG) {
+                                        return cs.getLastState().getTerminated();
+                                    }
+                                    return null;
+                                })
+                                .filter(Objects::nonNull)
+                                .findFirst()
+                                .map(terminated -> {
+                                    String msg = terminated.getMessage();
+                                    return msg != null ? msg : "File permission validation failed (exit code " + EX_CONFIG + ")";
+                                });
+                    });
+        }
+        catch (Exception e) {
+            LOGGER.atWarn()
+                    .addKeyValue(OperatorLoggingKeys.NAMESPACE, namespace(primary))
+                    .addKeyValue(OperatorLoggingKeys.NAME, name(primary))
+                    .addKeyValue(OperatorLoggingKeys.ERROR, e.getMessage())
+                    .log("Failed to check pods for file permission violations");
+            return Optional.empty();
+        }
     }
 
     @Override

@@ -6,6 +6,7 @@
 
 package io.kroxylicious.kubernetes.operator.reconciler.kafkaproxy;
 
+import java.util.Map;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -22,7 +23,11 @@ class PodSecondaryToKafkaProxyPrimaryMapper implements SecondaryToPrimaryMapper<
 
     @Override
     public Set<ResourceID> toPrimaryResourceIDs(Pod pod) {
-        String instanceName = pod.getMetadata().getLabels().get(INSTANCE_LABEL);
+        Map<String, String> labels = pod.getMetadata().getLabels();
+        if (labels == null) {
+            return Set.of();
+        }
+        String instanceName = labels.get(INSTANCE_LABEL);
         if (instanceName == null) {
             LOGGER.atDebug()
                     .addKeyValue("pod", pod.getMetadata().getName())
