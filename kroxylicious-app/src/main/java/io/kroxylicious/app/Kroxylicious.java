@@ -143,7 +143,9 @@ public class Kroxylicious implements Callable<Integer> {
      * @param args args
      */
     public static void main(String... args) {
-        int exitCode = new CommandLine(new Kroxylicious()).execute(args);
+        CommandLine cmd = new CommandLine(new Kroxylicious());
+        cmd.setExitCodeExceptionMapper(new FilePermissionExitCodeMapper());
+        int exitCode = cmd.execute(args);
         System.exit(exitCode);
     }
 
