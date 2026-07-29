@@ -27,7 +27,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  *
  * <p>File permissions are checked using the globally configured policy (see
  * {@link FilePermissionValidator#setGlobalPolicy(FilePermissionValidator.Policy)}).
- * An {@link IllegalStateException} is thrown if the file permissions are too open.
+ * A {@link io.kroxylicious.proxy.security.FilePermissionViolationException} is thrown if the file permissions are too open.
  *
  * @param passwordFile file containing the password.
  */

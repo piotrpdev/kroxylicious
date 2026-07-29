@@ -25,6 +25,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import io.kroxylicious.proxy.security.FilePermissionValidator;
 import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
+import io.kroxylicious.proxy.security.FilePermissionViolationException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -97,7 +98,7 @@ class FilePasswordTest {
         // When / Then - getProvidedPassword() throws because the file is too open
         var provider = new FilePassword(file.getAbsolutePath());
         assertThatThrownBy(provider::getProvidedPassword)
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(FilePermissionViolationException.class)
                 .hasMessageContaining("too open");
     }
 

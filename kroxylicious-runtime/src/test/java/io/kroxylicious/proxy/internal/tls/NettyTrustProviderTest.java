@@ -35,6 +35,7 @@ import io.kroxylicious.proxy.config.tls.TlsClientAuth;
 import io.kroxylicious.proxy.config.tls.TrustStore;
 import io.kroxylicious.proxy.security.FilePermissionValidator;
 import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
+import io.kroxylicious.proxy.security.FilePermissionViolationException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -143,7 +144,7 @@ class NettyTrustProviderTest {
         // When / Then
         assertThatCode(() -> trustStore.apply(sslContextBuilder))
                 .hasMessageContaining("Error building SSLContext")
-                .hasRootCauseInstanceOf(IllegalStateException.class)
+                .hasRootCauseInstanceOf(FilePermissionViolationException.class)
                 .rootCause()
                 .hasMessageContaining("too open")
                 .hasMessageContaining("0644");
@@ -167,7 +168,7 @@ class NettyTrustProviderTest {
         // When / Then
         assertThatCode(() -> trustStore.apply(sslContextBuilder))
                 .hasMessageContaining("Error building SSLContext")
-                .hasRootCauseInstanceOf(IllegalStateException.class)
+                .hasRootCauseInstanceOf(FilePermissionViolationException.class)
                 .rootCause()
                 .hasMessageContaining("too open")
                 .hasMessageContaining("password file");

@@ -36,6 +36,7 @@ import io.kroxylicious.kms.provider.aws.kms.credentials.WebIdentityCredentialsPr
 import io.kroxylicious.kms.service.KmsException;
 import io.kroxylicious.proxy.security.FilePermissionValidator;
 import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
+import io.kroxylicious.proxy.security.FilePermissionViolationException;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.containing;
@@ -296,7 +297,7 @@ class WebIdentityCredentialsProviderTest {
             assertThat(provider.getCredentials())
                     .failsWithin(Duration.ofSeconds(5))
                     .withThrowableOfType(Exception.class)
-                    .withCauseInstanceOf(IllegalStateException.class)
+                    .withCauseInstanceOf(FilePermissionViolationException.class)
                     .withMessageContaining("too open");
         }
     }

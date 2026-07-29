@@ -35,6 +35,7 @@ import io.kroxylicious.proxy.config.tls.KeyPair;
 import io.kroxylicious.proxy.config.tls.KeyStore;
 import io.kroxylicious.proxy.security.FilePermissionValidator;
 import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
+import io.kroxylicious.proxy.security.FilePermissionViolationException;
 
 import static io.kroxylicious.proxy.internal.tls.TlsTestConstants.BADPASS;
 import static io.kroxylicious.proxy.internal.tls.TlsTestConstants.JKS;
@@ -231,10 +232,10 @@ class NettyKeyProviderTest {
         var keyPair = new NettyKeyProvider(
                 new KeyPair(insecureKey.toString(), TlsTestConstants.getResourceLocationOnFilesystem("server.crt"), null));
 
-        // When / Then - SslContextBuildException wrapping the permission IllegalStateException
+        // When / Then
         assertThatCode(keyPair::forServer)
                 .hasMessageContaining("Error building SSLContext")
-                .hasRootCauseInstanceOf(IllegalStateException.class)
+                .hasRootCauseInstanceOf(FilePermissionViolationException.class)
                 .rootCause()
                 .hasMessageContaining("too open")
                 .hasMessageContaining("0640");
@@ -253,7 +254,7 @@ class NettyKeyProviderTest {
         // When / Then
         assertThatCode(keyStore::forServer)
                 .hasMessageContaining("Error building SSLContext")
-                .hasRootCauseInstanceOf(IllegalStateException.class)
+                .hasRootCauseInstanceOf(FilePermissionViolationException.class)
                 .rootCause()
                 .hasMessageContaining("too open")
                 .hasMessageContaining("0644");
@@ -278,7 +279,7 @@ class NettyKeyProviderTest {
         // When / Then - the password file permission check fires before the keystore is opened
         assertThatCode(keyStore::forServer)
                 .hasMessageContaining("Error building SSLContext")
-                .hasRootCauseInstanceOf(IllegalStateException.class)
+                .hasRootCauseInstanceOf(FilePermissionViolationException.class)
                 .rootCause()
                 .hasMessageContaining("too open")
                 .hasMessageContaining("password file");
