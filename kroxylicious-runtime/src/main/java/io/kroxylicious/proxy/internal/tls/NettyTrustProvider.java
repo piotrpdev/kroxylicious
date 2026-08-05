@@ -29,6 +29,7 @@ import io.kroxylicious.proxy.config.tls.TrustProvider;
 import io.kroxylicious.proxy.config.tls.TrustProviderVisitor;
 import io.kroxylicious.proxy.config.tls.TrustStore;
 import io.kroxylicious.proxy.security.FilePermissionValidator;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Category;
 
 import edu.umd.cs.findbugs.annotations.Nullable;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -48,7 +49,7 @@ public class NettyTrustProvider {
             @Override
             public SslContextBuilder visit(TrustStore trustStore) {
                 try {
-                    FilePermissionValidator.validate(Path.of(trustStore.storeFile()), "truststore");
+                    FilePermissionValidator.validate(Path.of(trustStore.storeFile()), Category.TRUSTSTORES, "truststore");
                     validatePasswordProvider(trustStore.storePasswordProvider());
 
                     enableHostnameVerification();
@@ -125,7 +126,7 @@ public class NettyTrustProvider {
     @SuppressFBWarnings(value = "PATH_TRAVERSAL_IN", justification = "Paths are provided by the operator via Kroxylicious configuration and may reside anywhere on the filesystem.")
     private void validatePasswordProvider(@Nullable PasswordProvider provider) {
         if (provider instanceof FilePassword fp) {
-            FilePermissionValidator.validate(java.nio.file.Path.of(fp.passwordFile()), "password file");
+            FilePermissionValidator.validate(java.nio.file.Path.of(fp.passwordFile()), Category.SECRETS, "password file");
         }
     }
 

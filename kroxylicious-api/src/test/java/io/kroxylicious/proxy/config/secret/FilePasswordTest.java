@@ -24,6 +24,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import io.kroxylicious.proxy.security.FilePermissionValidator;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Category;
 import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 import io.kroxylicious.proxy.security.FilePermissionViolationException;
 
@@ -42,7 +43,7 @@ class FilePasswordTest {
 
     @AfterEach
     void afterEach() {
-        FilePermissionValidator.setGlobalPolicy(Policy.DISABLED);
+        FilePermissionValidator.resetGlobalPolicies();
         if (file != null && Files.exists(file.toPath()) && !file.delete()) {
             throw new IllegalStateException("Could not delete temp file: " + file.getAbsolutePath());
         }
@@ -93,7 +94,7 @@ class FilePasswordTest {
         // Given - a password file with group-read permissions and global policy set to STRICT
         Files.writeString(file.toPath(), "secret");
         Files.setPosixFilePermissions(file.toPath(), PosixFilePermissions.fromString("rw-r-----"));
-        FilePermissionValidator.setGlobalPolicy(Policy.STRICT);
+        FilePermissionValidator.setGlobalPolicy(Category.SECRETS, Policy.STRICT);
 
         // When / Then - getProvidedPassword() throws because the file is too open
         var provider = new FilePassword(file.getAbsolutePath());
@@ -108,7 +109,7 @@ class FilePasswordTest {
         // Given - a password file with owner-only permissions and global policy set to STRICT
         Files.writeString(file.toPath(), "secret");
         Files.setPosixFilePermissions(file.toPath(), PosixFilePermissions.fromString("rw-------"));
-        FilePermissionValidator.setGlobalPolicy(Policy.STRICT);
+        FilePermissionValidator.setGlobalPolicy(Category.SECRETS, Policy.STRICT);
 
         // When / Then - no exception thrown; password is read successfully
         var provider = new FilePassword(file.getAbsolutePath());

@@ -156,7 +156,7 @@ public class PodIdentityCredentialsProvider extends AbstractRefreshingCredential
 
     private String readAuthorizationToken() {
         try {
-            FilePermissionValidator.validate(authorizationTokenFile, "pod identity authorization token file");
+            FilePermissionValidator.validate(authorizationTokenFile, FilePermissionValidator.Category.PLATFORM_CREDENTIALS, "pod identity authorization token file");
             var token = Files.readString(authorizationTokenFile, StandardCharsets.UTF_8).trim();
             if (token.isEmpty()) {
                 throw new KmsException("Pod Identity authorization token file " + authorizationTokenFile + " is empty");

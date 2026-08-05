@@ -526,17 +526,17 @@ class RoutingGraphChangeDetectorTest {
                                         @Nullable List<RouterDefinition> routerDefs,
                                         VirtualCluster... clusters) {
         return new Configuration(null, clusterDefs, null, null, routerDefs, List.of(clusters), null, false,
-                Optional.empty(), null, null);
+                Optional.empty(), null, null, null);
     }
 
     private static Configuration configWithClusterDefs(List<ClusterDefinition> clusterDefs, VirtualCluster... clusters) {
         return new Configuration(null, clusterDefs, null, null, null, List.of(clusters), null, false,
-                Optional.empty(), null, null);
+                Optional.empty(), null, null, null);
     }
 
     private static Configuration configWithNoRoutersOrClusterDefs(VirtualCluster... clusters) {
         return new Configuration(null, null, null, null, null, List.of(clusters), null, false,
-                Optional.empty(), null, null);
+                Optional.empty(), null, null, null);
     }
 
     private static ClusterDefinition clusterDef(String name) {

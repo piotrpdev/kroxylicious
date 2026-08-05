@@ -232,18 +232,27 @@ public class KafkaProxyReconciler implements
                         // micrometer
                         Optional.empty(),
                         NetworkDefinitionBuilder.build(proxy),
-                        null, new SecurityConfig(new FilePermissionConfig(resolveFilePermissionPolicy(proxy)))),
+                        null, new SecurityConfig(resolveFilePermissionConfig(proxy))),
                 allVolumes,
                 allMounts);
     }
 
-    private static Policy resolveFilePermissionPolicy(KafkaProxy proxy) {
-        return Optional.ofNullable(proxy.getSpec())
+    private static FilePermissionConfig resolveFilePermissionConfig(KafkaProxy proxy) {
+        var filePerms = Optional.ofNullable(proxy.getSpec())
                 .map(KafkaProxySpec::getSecurity)
                 .map(io.kroxylicious.kubernetes.api.v1alpha1.kafkaproxyspec.Security::getFilePermissions)
-                .map(io.kroxylicious.kubernetes.api.v1alpha1.kafkaproxyspec.security.FilePermissions::getPolicy)
-                .map(crdPolicy -> Policy.valueOf(crdPolicy.name()))
-                .orElse(Policy.RELAXED);
+                .orElse(null);
+        if (filePerms == null) {
+            return new FilePermissionConfig(Policy.RELAXED, Policy.RELAXED, Policy.DISABLED);
+        }
+        return new FilePermissionConfig(
+                resolveEnumPolicy(filePerms.getSecrets(), Policy.RELAXED),
+                resolveEnumPolicy(filePerms.getTruststores(), Policy.RELAXED),
+                resolveEnumPolicy(filePerms.getPlatformCredentials(), Policy.DISABLED));
+    }
+
+    private static <E extends Enum<E>> Policy resolveEnumPolicy(@Nullable E crdPolicy, Policy defaultPolicy) {
+        return crdPolicy != null ? Policy.valueOf(crdPolicy.name()) : defaultPolicy;
     }
 
     private static List<ConfigurationFragment<VirtualCluster>> buildVirtualClusters(Set<String> successfullyBuiltFilterNames, ProxyModel model) {

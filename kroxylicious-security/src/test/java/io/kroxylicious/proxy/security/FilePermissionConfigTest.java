@@ -6,8 +6,11 @@
 
 package io.kroxylicious.proxy.security;
 
+import java.util.Map;
+
 import org.junit.jupiter.api.Test;
 
+import io.kroxylicious.proxy.security.FilePermissionValidator.Category;
 import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,42 +18,50 @@ import static org.assertj.core.api.Assertions.assertThat;
 class FilePermissionConfigTest {
 
     @Test
-    void shouldDefaultToDisabledPolicy() {
+    void defaultConfigDisablesAllCategories() {
         // Given / When
-        FilePermissionConfig config = FilePermissionConfig.DEFAULT;
+        var policies = FilePermissionConfig.DEFAULT.getEffectivePolicies();
+
         // Then
-        assertThat(config.getEffectivePolicy()).isEqualTo(Policy.DISABLED);
+        assertThat(policies).containsExactlyInAnyOrderEntriesOf(Map.of(
+                Category.SECRETS, Policy.DISABLED,
+                Category.TRUSTSTORES, Policy.DISABLED,
+                Category.PLATFORM_CREDENTIALS, Policy.DISABLED));
     }
 
     @Test
-    void shouldTreatNullPolicyAsDisabled() {
+    void nullFieldsDefaultToDisabled() {
         // Given / When
-        FilePermissionConfig config = new FilePermissionConfig(null);
+        var policies = new FilePermissionConfig(null, null, null).getEffectivePolicies();
+
         // Then
-        assertThat(config.getEffectivePolicy()).isEqualTo(Policy.DISABLED);
+        assertThat(policies).containsExactlyInAnyOrderEntriesOf(Map.of(
+                Category.SECRETS, Policy.DISABLED,
+                Category.TRUSTSTORES, Policy.DISABLED,
+                Category.PLATFORM_CREDENTIALS, Policy.DISABLED));
     }
 
     @Test
-    void shouldReturnStrictWhenExplicitlyConfigured() {
-        // Given
-        FilePermissionConfig config = new FilePermissionConfig(Policy.STRICT);
-        // When / Then
-        assertThat(config.getEffectivePolicy()).isEqualTo(Policy.STRICT);
+    void explicitPoliciesAreReturned() {
+        // Given / When
+        var policies = new FilePermissionConfig(Policy.STRICT, Policy.RELAXED, Policy.DISABLED).getEffectivePolicies();
+
+        // Then
+        assertThat(policies).containsExactlyInAnyOrderEntriesOf(Map.of(
+                Category.SECRETS, Policy.STRICT,
+                Category.TRUSTSTORES, Policy.RELAXED,
+                Category.PLATFORM_CREDENTIALS, Policy.DISABLED));
     }
 
     @Test
-    void shouldReturnRelaxedWhenExplicitlyConfigured() {
-        // Given
-        FilePermissionConfig config = new FilePermissionConfig(Policy.RELAXED);
-        // When / Then
-        assertThat(config.getEffectivePolicy()).isEqualTo(Policy.RELAXED);
-    }
+    void partialConfigDefaultsRemainingToDisabled() {
+        // Given / When
+        var policies = new FilePermissionConfig(Policy.STRICT, null, null).getEffectivePolicies();
 
-    @Test
-    void shouldReturnDisabledWhenExplicitlyConfigured() {
-        // Given
-        FilePermissionConfig config = new FilePermissionConfig(Policy.DISABLED);
-        // When / Then
-        assertThat(config.getEffectivePolicy()).isEqualTo(Policy.DISABLED);
+        // Then
+        assertThat(policies).containsExactlyInAnyOrderEntriesOf(Map.of(
+                Category.SECRETS, Policy.STRICT,
+                Category.TRUSTSTORES, Policy.DISABLED,
+                Category.PLATFORM_CREDENTIALS, Policy.DISABLED));
     }
 }

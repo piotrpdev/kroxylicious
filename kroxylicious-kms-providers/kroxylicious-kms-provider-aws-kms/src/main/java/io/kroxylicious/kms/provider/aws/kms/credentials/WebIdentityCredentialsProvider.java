@@ -210,7 +210,7 @@ public class WebIdentityCredentialsProvider extends AbstractRefreshingCredential
 
     private String readWebIdentityToken() {
         try {
-            FilePermissionValidator.validate(webIdentityTokenFile, "web identity token file");
+            FilePermissionValidator.validate(webIdentityTokenFile, FilePermissionValidator.Category.PLATFORM_CREDENTIALS, "web identity token file");
             var token = Files.readString(webIdentityTokenFile, StandardCharsets.UTF_8).trim();
             if (token.isEmpty()) {
                 throw new KmsException("web identity token file " + webIdentityTokenFile + " is empty");

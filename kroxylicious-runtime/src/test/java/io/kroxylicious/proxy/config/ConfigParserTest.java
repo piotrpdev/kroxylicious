@@ -40,6 +40,7 @@ import io.kroxylicious.proxy.internal.filter.RecordConfig;
 import io.kroxylicious.proxy.internal.filter.SetterInjectionConfig;
 import io.kroxylicious.proxy.internal.tls.TlsTestConstants;
 import io.kroxylicious.proxy.plugin.UnknownPluginInstanceException;
+import io.kroxylicious.proxy.security.FilePermissionValidator;
 import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 import io.kroxylicious.proxy.service.HostPort;
 
@@ -1232,12 +1233,14 @@ class ConfigParserTest {
     }
 
     @Test
-    void shouldParseSecurityFilePermissionsPolicy() {
+    void shouldParseSecurityFilePermissionsPerCategory() {
         // Given
         var yaml = """
                 security:
                   filePermissions:
-                    policy: STRICT
+                    secrets: STRICT
+                    truststores: RELAXED
+                    platformCredentials: DISABLED
                 virtualClusters:
                 - name: demo
                   targetCluster:
@@ -1253,8 +1256,10 @@ class ConfigParserTest {
 
         // Then
         assertThat(config.security()).isNotNull();
-        assertThat(config.getEffectiveSecurity().getEffectiveFilePermissions().getEffectivePolicy())
-                .isEqualTo(Policy.STRICT);
+        var policies = config.getEffectiveSecurity().getEffectiveFilePermissions().getEffectivePolicies();
+        assertThat(policies.get(FilePermissionValidator.Category.SECRETS)).isEqualTo(Policy.STRICT);
+        assertThat(policies.get(FilePermissionValidator.Category.TRUSTSTORES)).isEqualTo(Policy.RELAXED);
+        assertThat(policies.get(FilePermissionValidator.Category.PLATFORM_CREDENTIALS)).isEqualTo(Policy.DISABLED);
     }
 
     @Test
@@ -1275,8 +1280,10 @@ class ConfigParserTest {
         var config = configParser.parseConfiguration(yaml);
 
         // Then
-        assertThat(config.getEffectiveSecurity().getEffectiveFilePermissions().getEffectivePolicy())
-                .isEqualTo(Policy.DISABLED);
+        var policies = config.getEffectiveSecurity().getEffectiveFilePermissions().getEffectivePolicies();
+        assertThat(policies.get(FilePermissionValidator.Category.SECRETS)).isEqualTo(Policy.DISABLED);
+        assertThat(policies.get(FilePermissionValidator.Category.TRUSTSTORES)).isEqualTo(Policy.DISABLED);
+        assertThat(policies.get(FilePermissionValidator.Category.PLATFORM_CREDENTIALS)).isEqualTo(Policy.DISABLED);
     }
 
     private record NonSerializableConfig(String id) {

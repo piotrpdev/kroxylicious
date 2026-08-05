@@ -329,9 +329,9 @@ public class VirtualClusterModel implements AutoCloseable {
         return filePermissionPolicy;
     }
 
-    public static NettyTrustProvider configureTrustProvider(Tls tlsConfiguration, Policy policy) {
+    public static NettyTrustProvider configureTrustProvider(Tls tlsConfiguration) {
         final TrustProvider trustProvider = Optional.ofNullable(tlsConfiguration.trust()).orElse(PlatformTrustProvider.INSTANCE);
-        return new NettyTrustProvider(trustProvider, policy);
+        return new NettyTrustProvider(trustProvider);
     }
 
     public static void configureCipherSuites(SslContextBuilder sslContextBuilder, Tls tlsConfiguration) {
@@ -615,14 +615,14 @@ public class VirtualClusterModel implements AutoCloseable {
                 }
                 try {
                     var sslContextBuilder = Optional.of(tlsConfiguration.key())
-                            .map(key -> new NettyKeyProvider(key, virtualCluster.filePermissionPolicy))
+                            .map(NettyKeyProvider::new)
                             .map(NettyKeyProvider::forServer)
                             .orElseThrow();
 
                     configureCipherSuites(sslContextBuilder, tlsConfiguration);
                     configureEnabledProtocols(sslContextBuilder, tlsConfiguration);
 
-                    return configureTrustProvider(tlsConfiguration, virtualCluster.filePermissionPolicy).apply(sslContextBuilder).build();
+                    return configureTrustProvider(tlsConfiguration).apply(sslContextBuilder).build();
                 }
                 catch (SSLException e) {
                     throw new UncheckedIOException(e);

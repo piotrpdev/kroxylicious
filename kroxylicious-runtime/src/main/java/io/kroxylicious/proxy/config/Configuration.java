@@ -105,7 +105,7 @@ public record Configuration(
 
         // Can't call getEffectiveSecurity() here as this.security is null there.
         SecurityConfig effectiveSecurity = security != null ? security : SecurityConfig.DEFAULT;
-        FilePermissionValidator.setGlobalPolicy(effectiveSecurity.getEffectiveFilePermissions().getEffectivePolicy());
+        FilePermissionValidator.setGlobalPolicies(effectiveSecurity.getEffectiveFilePermissions().getEffectivePolicies());
 
         if (filterDefinitions != null) {
             checkAllNamedFilterAreUsed(filterDefinitions, virtualClusters, defaultFilters, routerDefinitions);

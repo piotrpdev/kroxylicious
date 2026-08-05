@@ -16,7 +16,7 @@ Similar to how the `ssh` command refuses to use a private key file that is world
 
 == Policy modes
 
-The `security.filePermissions.policy` property controls how permissions are checked:
+Three policy modes are available for each category:
 
 `STRICT`:: Files must be accessible only by their owner.
 Permissions with any group or other read, write, or execute bits set are rejected.
@@ -28,33 +28,42 @@ This supports Kubernetes deployments where secrets are mounted with a group set 
 
 `DISABLED`:: No permissions are enforced.
 A warning is logged for files that would be rejected by `STRICT` or `RELAXED`, but startup is never rejected.
-This is the default for backward compatibility until the default is changed to `STRICT` in a future release.
+This is the default for all categories for backward compatibility.
 
-.Configuration fragment enabling STRICT permission checking
+== File categories
+
+Policies are configured per category under `security.filePermissions`:
+
+`secrets`:: TLS private keys, keystores, and password files (including KMS credentials such as Vault tokens, AWS access keys, and Azure client secrets via `FilePassword`).
+Default: `DISABLED` (will change to `STRICT` in a future release).
+
+`truststores`:: TLS truststore files.
+Default: `DISABLED` (will change to `RELAXED` in a future release).
+
+`platformCredentials`:: Platform-managed credential files such as AWS IRSA web identity tokens and AWS EKS Pod Identity authorization tokens.
+These are injected by cloud provider webhooks and the user cannot control their permissions.
+Default: `DISABLED` (will remain `DISABLED`).
+
+.Configuration fragment with per-category policies
 [source,yaml]
 ----
 security:
   filePermissions:
-    policy: STRICT
+    secrets: STRICT
+    truststores: RELAXED
+    platformCredentials: DISABLED
 ----
 
-.Configuration fragment enabling RELAXED permission checking for Kubernetes
-[source,yaml]
-----
-security:
-  filePermissions:
-    policy: RELAXED
-----
+When a category is omitted from the configuration, its default value is used.
+When the entire `security.filePermissions` section is omitted, all categories use their default values.
 
 == What is checked
 
-When a non-`DISABLED` policy is configured, Kroxylicious checks permissions before reading any of the following files:
+When a non-`DISABLED` policy is configured for a category, Kroxylicious checks permissions before reading any file in that category:
 
-* TLS private key files (configured via `key.privateKeyFile`)
-* TLS keystore and truststore files (configured via `key.storeFile` or `trust.storeFile`)
-* Password files referenced by `FilePassword` providers (including KMS credentials such as Vault tokens, AWS access keys, and Azure client secrets)
-* AWS IRSA web identity token files
-* AWS EKS Pod Identity authorization token files
+* `secrets`: TLS private key files, keystore files, and password files referenced by `FilePassword` providers
+* `truststores`: TLS truststore files
+* `platformCredentials`: AWS IRSA web identity token files and AWS EKS Pod Identity authorization token files
 
 If a file fails the permission check, Kroxylicious throws a `FilePermissionViolationException` and the proxy fails to start.
 
@@ -65,7 +74,7 @@ This distinct exit code allows the Kubernetes operator to determine _why_ the pr
 
 == Making files compliant
 
-To restrict a file to owner-only access:
+To restrict a file to owner-only access (`STRICT`):
 
 [source,bash]
 ----
@@ -86,7 +95,7 @@ The Kroxylicious Operator automatically sets the pod security context so that se
 On OpenShift, `fsGroup` and `runAsGroup` are omitted because the `restricted-v2` SCC's `MustRunAs` strategy automatically injects the namespace-allocated GID.
 
 With these settings in place, the `RELAXED` policy is suitable for operator-managed deployments.
-The operator defaults to `RELAXED` when no policy is explicitly configured in the `KafkaProxy` resource.
+The operator defaults to `secrets: RELAXED`, `truststores: RELAXED`, `platformCredentials: DISABLED` when no policies are explicitly configured in the `KafkaProxy` resource.
 
 === Operator status condition
 
@@ -105,9 +114,9 @@ You can inspect the condition with:
 kubectl get kafkaproxy simple -o jsonpath='{.status.conditions}'
 ----
 
-=== Configuring the policy in the KafkaProxy CRD
+=== Configuring per-category policies in the KafkaProxy CRD
 
-The `KafkaProxy` CRD exposes the file permission policy at `spec.security.filePermissions.policy`:
+The `KafkaProxy` CRD exposes per-category file permission policies at `spec.security.filePermissions`:
 
 [source,yaml]
 ----
@@ -118,12 +127,17 @@ metadata:
 spec:
   security:
     filePermissions:
-      policy: RELAXED
+      secrets: RELAXED
+      truststores: RELAXED
+      platformCredentials: DISABLED
 ----
 
-When running the proxy directly on Linux (not via the operator), use `STRICT` policy and ensure secret files have owner-only permissions:
+When running the proxy directly on Linux (not via the operator), use `STRICT` for secrets and ensure secret files have owner-only permissions:
 
-[source,bash]
+[source,yaml]
 ----
-chmod 600 /path/to/private.key
+security:
+  filePermissions:
+    secrets: STRICT
+    truststores: RELAXED
 ----

@@ -58,7 +58,7 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
 
     @AfterEach
     void resetGlobalPolicy() {
-        FilePermissionValidator.setGlobalPolicy(Policy.DISABLED);
+        FilePermissionValidator.resetGlobalPolicies();
     }
 
     @Test
@@ -178,7 +178,7 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
 
         // @formatter:off
         var builder = KroxyliciousConfigUtils.baseConfigurationBuilder()
-                .withSecurity(new SecurityConfig(new FilePermissionConfig(Policy.STRICT)))
+                .withSecurity(new SecurityConfig(new FilePermissionConfig(Policy.STRICT, Policy.STRICT, Policy.STRICT)))
                 .addNewClusterDefinition()
                     .withName(TARGET_CLUSTER_NAME)
                     .withBootstrapServers(tlsCluster.getBootstrapServers())
@@ -220,7 +220,7 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
 
         // @formatter:off
         var builder = KroxyliciousConfigUtils.baseConfigurationBuilder()
-                .withSecurity(new SecurityConfig(new FilePermissionConfig(Policy.RELAXED)))
+                .withSecurity(new SecurityConfig(new FilePermissionConfig(Policy.RELAXED, Policy.RELAXED, Policy.RELAXED)))
                 .addNewClusterDefinition()
                     .withName(TARGET_CLUSTER_NAME)
                     .withBootstrapServers(tlsCluster.getBootstrapServers())
@@ -261,7 +261,7 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
 
         // @formatter:off
         var builder = KroxyliciousConfigUtils.baseConfigurationBuilder()
-                .withSecurity(new SecurityConfig(new FilePermissionConfig(Policy.STRICT)))
+                .withSecurity(new SecurityConfig(new FilePermissionConfig(Policy.STRICT, Policy.STRICT, Policy.STRICT)))
                 .addNewClusterDefinition()
                     .withName(TARGET_CLUSTER_NAME)
                     .withBootstrapServers(tlsCluster.getBootstrapServers())
@@ -421,7 +421,7 @@ class TlsFilePermissionsIT extends AbstractTlsIT {
 
     private ConfigurationBuilder baseBuilderWithPolicy(Policy policy) {
         return KroxyliciousConfigUtils.baseConfigurationBuilder()
-                .withSecurity(new SecurityConfig(new FilePermissionConfig(policy)))
+                .withSecurity(new SecurityConfig(new FilePermissionConfig(policy, policy, policy)))
                 .addToClusterDefinitions(new ClusterDefinition(TARGET_CLUSTER_NAME, cluster.getBootstrapServers(), null));
     }
 

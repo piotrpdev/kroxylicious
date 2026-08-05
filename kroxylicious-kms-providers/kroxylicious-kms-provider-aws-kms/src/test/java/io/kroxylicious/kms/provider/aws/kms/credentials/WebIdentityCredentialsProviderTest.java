@@ -35,6 +35,7 @@ import io.kroxylicious.kms.provider.aws.kms.config.WebIdentityCredentialsProvide
 import io.kroxylicious.kms.provider.aws.kms.credentials.WebIdentityCredentialsProvider.AssumedRoleCredentials;
 import io.kroxylicious.kms.service.KmsException;
 import io.kroxylicious.proxy.security.FilePermissionValidator;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Category;
 import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 import io.kroxylicious.proxy.security.FilePermissionViolationException;
 
@@ -88,7 +89,7 @@ class WebIdentityCredentialsProviderTest {
     @AfterEach
     void afterEach() {
         stsServer.resetAll();
-        FilePermissionValidator.setGlobalPolicy(Policy.DISABLED);
+        FilePermissionValidator.resetGlobalPolicies();
     }
 
     @Test
@@ -288,7 +289,7 @@ class WebIdentityCredentialsProviderTest {
     void strictPolicyMakesCredentialRefreshFailForInsecureTokenFile() throws IOException {
         // Given - token file with group-read permissions and STRICT global policy
         Files.setPosixFilePermissions(tokenFile, PosixFilePermissions.fromString("rw-r-----"));
-        FilePermissionValidator.setGlobalPolicy(Policy.STRICT);
+        FilePermissionValidator.setGlobalPolicy(Category.PLATFORM_CREDENTIALS, Policy.STRICT);
         var cfg = config(ROLE_ARN, tokenFile, "s", URI.create(stsServer.baseUrl() + STS_PATH));
 
         // When - the credential refresh fires (token file has bad permissions)
@@ -307,7 +308,7 @@ class WebIdentityCredentialsProviderTest {
     void strictPolicyDoesNotAffectCredentialRefreshForSecureTokenFile() throws IOException {
         // Given - token file with owner-only permissions and STRICT global policy
         Files.setPosixFilePermissions(tokenFile, PosixFilePermissions.fromString("rw-------"));
-        FilePermissionValidator.setGlobalPolicy(Policy.STRICT);
+        FilePermissionValidator.setGlobalPolicy(Category.PLATFORM_CREDENTIALS, Policy.STRICT);
         stubStsSuccess("ASIA", "s", "t", Instant.parse("2099-01-01T00:00:00Z"));
         var cfg = config(ROLE_ARN, tokenFile, "s", URI.create(stsServer.baseUrl() + STS_PATH));
 

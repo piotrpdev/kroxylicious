@@ -193,26 +193,39 @@ spec:
                     filePermissions:
                       type: object
                       description: |
-                        Configuration for file permission validation on confidential files
-                        (TLS private keys, keystores, and password files). When set, the proxy
-                        validates that confidential files do not have overly permissive access
-                        rights before using them.
+                        Per-category file permission validation policies for confidential files.
+                        Each category can be independently set to STRICT, RELAXED, or DISABLED.
+                        Operator defaults: secrets=RELAXED, truststores=RELAXED, platformCredentials=DISABLED.
                       properties:
-                        policy:
+                        secrets:
                           description: |
-                            The file permission validation policy. Defaults to RELAXED for
-                            operator-managed deployments.
-                            STRICT: files must be owner-only (0400/0600); no group or other bits.
-                            RELAXED: other-access bits forbidden; group bits permitted, suitable
-                            for Kubernetes deployments that use fsGroup.
-                            DISABLED: no enforcement; a warning is logged for files that would
-                            be rejected by other policies.
+                            Policy for TLS private keys, keystores, and password files.
+                            STRICT: owner-only (0400/0600).
+                            RELAXED: group bits allowed (default for operator).
+                            DISABLED: no enforcement.
                           type: string
-                          enum:
-                            - STRICT
-                            - RELAXED
-                            - DISABLED
+                          enum: [STRICT, RELAXED, DISABLED]
                           default: RELAXED
+                        truststores:
+                          description: |
+                            Policy for TLS truststore files.
+                            STRICT: owner-only.
+                            RELAXED: group bits allowed (default for operator).
+                            DISABLED: no enforcement.
+                          type: string
+                          enum: [STRICT, RELAXED, DISABLED]
+                          default: RELAXED
+                        platformCredentials:
+                          description: |
+                            Policy for platform-managed credential files (e.g. AWS IRSA tokens,
+                            Pod Identity tokens). These are typically mounted by the cloud platform
+                            with permissions the user cannot control.
+                            STRICT: owner-only.
+                            RELAXED: group bits allowed.
+                            DISABLED: no enforcement (default).
+                          type: string
+                          enum: [STRICT, RELAXED, DISABLED]
+                          default: DISABLED
             status:
               type: object
               properties:

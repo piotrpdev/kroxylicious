@@ -34,6 +34,7 @@ import io.kroxylicious.proxy.config.tls.ServerOptions;
 import io.kroxylicious.proxy.config.tls.TlsClientAuth;
 import io.kroxylicious.proxy.config.tls.TrustStore;
 import io.kroxylicious.proxy.security.FilePermissionValidator;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Category;
 import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 import io.kroxylicious.proxy.security.FilePermissionViolationException;
 
@@ -46,7 +47,7 @@ class NettyTrustProviderTest {
 
     @AfterEach
     void afterEach() {
-        FilePermissionValidator.setGlobalPolicy(Policy.DISABLED);
+        FilePermissionValidator.resetGlobalPolicies();
     }
 
     public static Stream<Arguments> trustStoreTypes() {
@@ -137,7 +138,8 @@ class NettyTrustProviderTest {
         Path insecureTruststore = tmp.resolve("client.jks");
         Files.copy(Path.of(TlsTestConstants.getResourceLocationOnFilesystem("client.jks")), insecureTruststore);
         Files.setPosixFilePermissions(insecureTruststore, PosixFilePermissions.fromString("rw-r--r--"));
-        FilePermissionValidator.setGlobalPolicy(Policy.STRICT);
+        FilePermissionValidator.setGlobalPolicy(Category.TRUSTSTORES, Policy.STRICT);
+        FilePermissionValidator.setGlobalPolicy(Category.SECRETS, Policy.STRICT);
         var trustStore = new NettyTrustProvider(
                 new TrustStore(insecureTruststore.toString(), TlsTestConstants.STOREPASS, null, null));
 
@@ -160,7 +162,8 @@ class NettyTrustProviderTest {
         Path insecurePassFile = tmp.resolve("storepass.txt");
         Files.writeString(insecurePassFile, TlsTestConstants.STOREPASS.getProvidedPassword());
         Files.setPosixFilePermissions(insecurePassFile, PosixFilePermissions.fromString("rw-r-----"));
-        FilePermissionValidator.setGlobalPolicy(Policy.STRICT);
+        FilePermissionValidator.setGlobalPolicy(Category.TRUSTSTORES, Policy.STRICT);
+        FilePermissionValidator.setGlobalPolicy(Category.SECRETS, Policy.STRICT);
         var trustStore = new NettyTrustProvider(
                 new TrustStore(secureTruststore.toString(),
                         new FilePassword(insecurePassFile.toString()), null, null));

@@ -10,6 +10,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -29,7 +31,7 @@ public class FilePermissionValidator {
     private static final Logger LOGGER = LoggerFactory.getLogger(FilePermissionValidator.class);
     private static final AtomicBoolean NON_POSIX_WARNING_LOGGED = new AtomicBoolean(false);
     private static final Set<Path> DISABLED_POLICY_WARNED = ConcurrentHashMap.newKeySet();
-    private static final AtomicReference<Policy> GLOBAL_POLICY = new AtomicReference<>(Policy.DISABLED);
+    private static final AtomicReference<Map<Category, Policy>> GLOBAL_POLICIES = new AtomicReference<>(defaultPolicies());
 
     /**
      * Permission validation policy.
@@ -46,38 +48,84 @@ public class FilePermissionValidator {
         RELAXED,
 
         /**
-         * Never reject — log a warning for world-readable files. Escape hatch for environments
+         * Never reject - log a warning for world-readable files. Escape hatch for environments
          * where POSIX permission checks are not meaningful.
          */
         DISABLED
     }
 
+    /**
+     * Categories of confidential files, each with an independent policy.
+     */
+    public enum Category {
+        /**
+         * TLS private keys, keystores, and password files. User/operator-controlled, high sensitivity.
+         */
+        SECRETS,
+
+        /**
+         * TLS truststore files. User/operator-controlled, lower sensitivity (public certificates).
+         */
+        TRUSTSTORES,
+
+        /**
+         * Platform-managed credential files (e.g. AWS IRSA tokens, Pod Identity tokens).
+         * Permissions are controlled by the cloud platform, not the user.
+         */
+        PLATFORM_CREDENTIALS
+    }
+
     private FilePermissionValidator() {
     }
 
-    /**
-     * Sets the global policy used by {@link #validate(Path, String)}.
-     *
-     * <p>This is an internal Kroxylicious method. Do not call it from
-     * application or plugin code: doing so will alter the validation policy
-     * for all confidential file reads across the proxy.
-     *
-     * @param policy the policy to apply globally
-     */
-    public static void setGlobalPolicy(@NonNull Policy policy) {
-        GLOBAL_POLICY.set(policy);
+    private static Map<Category, Policy> defaultPolicies() {
+        var map = new EnumMap<Category, Policy>(Category.class);
+        map.put(Category.SECRETS, Policy.DISABLED);
+        map.put(Category.TRUSTSTORES, Policy.DISABLED);
+        map.put(Category.PLATFORM_CREDENTIALS, Policy.DISABLED);
+        return map;
     }
 
     /**
-     * Validates file permissions using the global policy set by {@link #setGlobalPolicy(Policy)}.
-     * Intended for call sites (e.g. credential providers) that do not receive the policy explicitly.
+     * Sets the global policy for a single category.
+     *
+     * <p>This is an internal Kroxylicious method. Do not call it from
+     * application or plugin code: doing so will alter the validation policy
+     * for confidential file reads across the proxy.
+     *
+     * @param category the file category
+     * @param policy the policy to apply
+     */
+    public static void setGlobalPolicy(@NonNull Category category, @NonNull Policy policy) {
+        GLOBAL_POLICIES.updateAndGet(current -> {
+            var updated = new EnumMap<>(current);
+            updated.put(category, policy);
+            return updated;
+        });
+    }
+
+    /**
+     * Sets the global policy for all categories at once.
+     *
+     * @param policies the per-category policies
+     */
+    public static void setGlobalPolicies(@NonNull Map<Category, Policy> policies) {
+        var updated = new EnumMap<>(defaultPolicies());
+        updated.putAll(policies);
+        GLOBAL_POLICIES.set(updated);
+    }
+
+    /**
+     * Validates file permissions using the global policy for the given category.
      *
      * @param file the file to validate
+     * @param category the file category (determines which policy applies)
      * @param fileDescription human-readable description used in error messages (e.g. "password file")
-     * @throws IllegalStateException if permissions are too permissive and the global policy is STRICT or RELAXED
+     * @throws FilePermissionViolationException if permissions are too permissive
      */
-    public static void validate(@NonNull Path file, @NonNull String fileDescription) {
-        validate(file, GLOBAL_POLICY.get(), fileDescription);
+    public static void validate(@NonNull Path file, @NonNull Category category, @NonNull String fileDescription) {
+        Policy policy = GLOBAL_POLICIES.get().getOrDefault(category, Policy.DISABLED);
+        validate(file, policy, fileDescription);
     }
 
     /**
@@ -86,7 +134,7 @@ public class FilePermissionValidator {
      * @param file the file to validate
      * @param policy the validation policy to apply
      * @param fileDescription human-readable description used in error messages (e.g. "private key", "keystore")
-     * @throws IllegalStateException if permissions are too permissive and policy is STRICT or RELAXED
+     * @throws FilePermissionViolationException if permissions are too permissive and policy is STRICT or RELAXED
      */
     public static void validate(@NonNull Path file, @NonNull Policy policy, @NonNull String fileDescription) {
         validate(file, policy, fileDescription, LOGGER, DISABLED_POLICY_WARNED);
@@ -116,6 +164,13 @@ public class FilePermissionValidator {
         }
     }
 
+    /**
+     * Resets all global policies to their defaults. Intended for test cleanup only.
+     */
+    public static void resetGlobalPolicies() {
+        GLOBAL_POLICIES.set(defaultPolicies());
+    }
+
     private static void checkPermissions(Path file, Set<PosixFilePermission> perms, Policy policy,
                                          String fileDescription, Logger logger, Set<Path> disabledPolicyWarned) {
         boolean otherAccess = perms.stream().anyMatch(p -> p.name().startsWith("OTHERS"));
@@ -143,7 +198,7 @@ public class FilePermissionValidator {
                         .log("Confidential file has permissions that would be rejected by STRICT or RELAXED policy. " +
                                 "File permission checking is currently disabled - DISABLED is the default for backward compatibility " +
                                 "but this will be changed in a future release. " +
-                                "To enforce minimum permissions now, set 'security.filePermissions.policy: STRICT'.");
+                                "To enforce minimum permissions now, configure 'security.filePermissions'.");
             }
         }
         else {

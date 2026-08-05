@@ -34,6 +34,7 @@ import io.kroxylicious.proxy.config.secret.PasswordProvider;
 import io.kroxylicious.proxy.config.tls.KeyPair;
 import io.kroxylicious.proxy.config.tls.KeyStore;
 import io.kroxylicious.proxy.security.FilePermissionValidator;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Category;
 import io.kroxylicious.proxy.security.FilePermissionValidator.Policy;
 import io.kroxylicious.proxy.security.FilePermissionViolationException;
 
@@ -54,7 +55,7 @@ class NettyKeyProviderTest {
 
     @AfterEach
     void afterEach() {
-        FilePermissionValidator.setGlobalPolicy(Policy.DISABLED);
+        FilePermissionValidator.resetGlobalPolicies();
     }
 
     private static Stream<Arguments> withKeyStore() {
@@ -228,7 +229,7 @@ class NettyKeyProviderTest {
         Path insecureKey = tmp.resolve("server.key");
         Files.copy(Path.of(TlsTestConstants.getResourceLocationOnFilesystem("server.key")), insecureKey);
         Files.setPosixFilePermissions(insecureKey, PosixFilePermissions.fromString("rw-r-----"));
-        FilePermissionValidator.setGlobalPolicy(Policy.STRICT);
+        FilePermissionValidator.setGlobalPolicy(Category.SECRETS, Policy.STRICT);
         var keyPair = new NettyKeyProvider(
                 new KeyPair(insecureKey.toString(), TlsTestConstants.getResourceLocationOnFilesystem("server.crt"), null));
 
@@ -248,7 +249,7 @@ class NettyKeyProviderTest {
         Path insecureKeystore = tmp.resolve("server.jks");
         Files.copy(Path.of(TlsTestConstants.getResourceLocationOnFilesystem("server.jks")), insecureKeystore);
         Files.setPosixFilePermissions(insecureKeystore, PosixFilePermissions.fromString("rw-r--r--"));
-        FilePermissionValidator.setGlobalPolicy(Policy.STRICT);
+        FilePermissionValidator.setGlobalPolicy(Category.SECRETS, Policy.STRICT);
         var keyStore = new NettyKeyProvider(new KeyStore(insecureKeystore.toString(), TlsTestConstants.STOREPASS, null, null));
 
         // When / Then
@@ -271,7 +272,7 @@ class NettyKeyProviderTest {
         Path insecurePassFile = tmp.resolve("password.txt");
         Files.writeString(insecurePassFile, TlsTestConstants.STOREPASS.getProvidedPassword());
         Files.setPosixFilePermissions(insecurePassFile, PosixFilePermissions.fromString("rw-r-----"));
-        FilePermissionValidator.setGlobalPolicy(Policy.STRICT);
+        FilePermissionValidator.setGlobalPolicy(Category.SECRETS, Policy.STRICT);
         var keyStore = new NettyKeyProvider(
                 new KeyStore(secureKeystore.toString(),
                         new FilePassword(insecurePassFile.toString()), null, null));
@@ -292,7 +293,7 @@ class NettyKeyProviderTest {
         Path secureKey = tmp.resolve("server.key");
         Files.copy(Path.of(TlsTestConstants.getResourceLocationOnFilesystem("server.key")), secureKey);
         Files.setPosixFilePermissions(secureKey, PosixFilePermissions.fromString("rw-------"));
-        FilePermissionValidator.setGlobalPolicy(Policy.STRICT);
+        FilePermissionValidator.setGlobalPolicy(Category.SECRETS, Policy.STRICT);
         var keyPair = new NettyKeyProvider(
                 new KeyPair(secureKey.toString(), TlsTestConstants.getResourceLocationOnFilesystem("server.crt"), null));
 

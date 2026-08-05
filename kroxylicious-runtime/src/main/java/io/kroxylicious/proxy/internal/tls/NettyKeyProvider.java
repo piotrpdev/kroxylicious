@@ -24,6 +24,7 @@ import io.kroxylicious.proxy.config.tls.KeyProvider;
 import io.kroxylicious.proxy.config.tls.KeyProviderVisitor;
 import io.kroxylicious.proxy.config.tls.KeyStore;
 import io.kroxylicious.proxy.security.FilePermissionValidator;
+import io.kroxylicious.proxy.security.FilePermissionValidator.Category;
 
 import edu.umd.cs.findbugs.annotations.Nullable;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -59,7 +60,7 @@ public class NettyKeyProvider {
             @Override
             public SslContextBuilder visit(KeyPair keyPair) {
                 try {
-                    FilePermissionValidator.validate(Path.of(keyPair.privateKeyFile()), "private key");
+                    FilePermissionValidator.validate(Path.of(keyPair.privateKeyFile()), Category.SECRETS, "private key");
                     validatePasswordProvider(keyPair.keyPasswordProvider());
                     return a.keyManager(new File(keyPair.certificateFile()), new File(keyPair.privateKeyFile()),
                             Optional.ofNullable(keyPair.keyPasswordProvider()).map(PasswordProvider::getProvidedPassword).orElse(null));
@@ -73,7 +74,7 @@ public class NettyKeyProvider {
             @Override
             public SslContextBuilder visit(KeyStore keyStore) {
                 try {
-                    FilePermissionValidator.validate(Path.of(keyStore.storeFile()), "keystore");
+                    FilePermissionValidator.validate(Path.of(keyStore.storeFile()), Category.SECRETS, "keystore");
                     validatePasswordProvider(keyStore.storePasswordProvider());
                     validatePasswordProvider(keyStore.keyPasswordProvider());
 
@@ -96,7 +97,7 @@ public class NettyKeyProvider {
     @SuppressFBWarnings(value = "PATH_TRAVERSAL_IN", justification = "Paths are provided by the operator via Kroxylicious configuration and may reside anywhere on the filesystem.")
     private void validatePasswordProvider(@Nullable PasswordProvider provider) {
         if (provider instanceof FilePassword fp) {
-            FilePermissionValidator.validate(Path.of(fp.passwordFile()), "password file");
+            FilePermissionValidator.validate(Path.of(fp.passwordFile()), Category.SECRETS, "password file");
         }
     }
 

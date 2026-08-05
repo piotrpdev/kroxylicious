@@ -4,10 +4,15 @@ issues:
   - 1038
 important_notes:
   - |
-    New `security.filePermissions.policy` configuration option validates POSIX permissions on TLS keys, keystores, truststores, and password files before reading them.
-    Policies: 
-    - `STRICT` (owner-only)
-    - `RELAXED` (allows group access for Kubernetes fsGroup)
-    - `DISABLED` (warn only, current default). The default will change from `DISABLED` to `STRICT` in a future release.
-    The Kubernetes operator now sets `defaultMode: 0440` on secret volumes, and configures `fsGroup`/`runAsGroup` on plain Kubernetes (omitted on OpenShift where the SCC handles it).
+    New `security.filePermissions` configuration with per-category policies validates POSIX permissions on confidential files before reading them.
+    Categories:
+    - `secrets` - TLS private keys, keystores, and password files
+    - `truststores` - TLS truststore files
+    - `platformCredentials` - AWS IRSA/Pod Identity token files
+    Each category supports `STRICT` (owner-only), `RELAXED` (allows group access), or `DISABLED` (warn only).
+    All defaults are `DISABLED` for backward compatibility. In a future release, the defaults will change to:
+    - `secrets: STRICT`
+    - `truststores: RELAXED`
+    - `platformCredentials: DISABLED`.
+    The Kubernetes operator defaults to `secrets: RELAXED`, `truststores: RELAXED`, `platformCredentials: DISABLED`, sets `defaultMode: 0440` on secret volumes, and configures `fsGroup`/`runAsGroup` on plain Kubernetes (omitted on OpenShift where the SCC handles it).
     The proxy exits with code 78 (`EX_CONFIG`) on file permission violations. The operator detects this and reports a `FilePermissionsValid=False` condition on the `KafkaProxy` resource.
